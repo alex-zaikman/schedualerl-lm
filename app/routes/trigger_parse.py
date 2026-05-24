@@ -8,22 +8,16 @@ from app.services.trigger_parse import TriggerParseError, parse_trigger_text
 router = APIRouter(tags=["triggers"])
 
 
-@router.post("/triggers/parse")
+@router.post("/triggers/parse", response_model=TriggerParseResponse)
 async def parse_trigger(
     body: TriggerParseRequest,
     settings: Settings = Depends(get_app_settings),
 ) -> TriggerParseResponse:
     try:
-        trigger_type, trigger_config, next_run_at = parse_trigger_text(
+        return parse_trigger_text(
             body.text,
             settings.llm,
             timezone=body.timezone,
         )
     except TriggerParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    return TriggerParseResponse(
-        trigger_type=trigger_type,
-        trigger_config=trigger_config,
-        next_run_at=next_run_at,
-    )

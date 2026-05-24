@@ -1,6 +1,5 @@
 import json
 import logging
-from datetime import datetime
 from typing import Any
 
 from litellm import completion
@@ -11,6 +10,7 @@ from app.config.settings import LLMSettings
 from app.prompts.loader import PromptLoadError, load_prompt
 from app.scheduler.triggers import compute_next_run_at, trigger_config_from_spec
 from app.schemas.tasks import CronTriggerSpec, TriggerSpec
+from app.schemas.trigger_parse import TriggerParseResponse
 from app.validation.cron import is_valid_cron_expression
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def parse_trigger_text(
     settings: LLMSettings,
     *,
     timezone: str = "UTC",
-) -> tuple[str, dict, datetime | None]:
+) -> TriggerParseResponse:
     try:
         system_prompt = load_prompt(settings.trigger_parse_prompt_path)
     except PromptLoadError as exc:
@@ -128,12 +128,13 @@ def parse_trigger_text(
         after=_after_retry,
         reraise=True,
     )
-    def _parse_once() -> tuple[str, dict, datetime | None]:
+    def _parse_once() -> TriggerParseResponse:
         raw = _call_llm(settings, messages)
         spec = _parse_trigger_json(raw)
-        trigger_type = spec.type
-        trigger_config = trigger_config_from_spec(spec)
-        next_run_at = compute_next_run_at(spec)
-        return trigger_type, trigger_config, next_run_at
+        return TriggerParseResponse(
+            trigger_type=spec.type,
+            trigger_config=trigger_config_from_spec(spec),
+            next_run_at=compute_next_run_at(spec),
+        )
 
     return _parse_once()

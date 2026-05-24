@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.jwt import encode_token
 from app.config.settings import Settings
+from app.enums import TriggerType
 from app.db.models.scheduled_task import ScheduledTask
 from app.db.rls import set_scheduler_rls
 from app.db.session import SessionFactory
@@ -64,12 +65,12 @@ async def execute_scheduled_task(task_id: str) -> None:
         )
         response.raise_for_status()
 
-        if task.trigger_type == "once":
+        if task.trigger_type == TriggerType.ONCE:
             task.is_active = False
             task.next_run_at = None
         await session.commit()
 
-    if task.trigger_type == "once" and _scheduler is not None:
+    if task.trigger_type == TriggerType.ONCE and _scheduler is not None:
         await _scheduler.remove_schedule(str(task.id))
 
 

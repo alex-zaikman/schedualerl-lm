@@ -1,8 +1,10 @@
 from datetime import datetime
-from typing import Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator
+
+from app.enums import TriggerType
+from app.schemas.tasks import TriggerConfig
 
 
 class TriggerParseRequest(BaseModel):
@@ -17,6 +19,6 @@ class TriggerParseRequest(BaseModel):
 
 
 class TriggerParseResponse(BaseModel):
-    trigger_type: Literal["once", "cron", "interval"]
-    trigger_config: dict
+    trigger_type: TriggerType
+    trigger_config: TriggerConfig
     next_run_at: datetime | None

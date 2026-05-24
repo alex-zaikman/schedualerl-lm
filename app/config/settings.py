@@ -1,10 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.enums import LogLevel
 from app.prompts.loader import DEFAULT_TRIGGER_PARSE_PROMPT_PATH
 
 
@@ -30,7 +30,7 @@ class AppSettings(_EnvSettings):
 
 class LogSettings(_EnvSettings):
     model_config = SettingsConfigDict(env_prefix="LOG_")
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    level: LogLevel = LogLevel.INFO
     format: str = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 
 
