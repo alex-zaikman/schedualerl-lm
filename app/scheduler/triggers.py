@@ -20,16 +20,17 @@ from app.schemas.tasks import (
 
 
 def build_trigger(spec: StructuredTriggerSpec):
-    if isinstance(spec, OnceTrigger):
-        run_at = spec.run_at
-        if run_at.tzinfo is None:
-            run_at = run_at.replace(tzinfo=timezone.utc)
-        return DateTrigger(run_at)
-    if isinstance(spec, CronTriggerSpec):
-        return CronTrigger.from_crontab(spec.expression, timezone=ZoneInfo(spec.timezone))
-    if isinstance(spec, IntervalTriggerSpec):
-        return IntervalTrigger(seconds=spec.seconds)
-    raise ValueError(f"Unsupported trigger type: {spec}")
+    match spec:
+        case OnceTrigger(run_at=run_at):
+            if run_at.tzinfo is None:
+                run_at = run_at.replace(tzinfo=timezone.utc)
+            return DateTrigger(run_at)
+        case CronTriggerSpec(expression=expression, timezone=tz):
+            return CronTrigger.from_crontab(expression, timezone=ZoneInfo(tz))
+        case IntervalTriggerSpec(seconds=seconds):
+            return IntervalTrigger(seconds=seconds)
+        case _:
+            raise ValueError(f"Unsupported trigger type: {spec}")
 
 
 def build_trigger_from_task(task: ScheduledTask):
@@ -39,29 +40,32 @@ def build_trigger_from_task(task: ScheduledTask):
 
 def _task_to_trigger_spec(task: ScheduledTask) -> StructuredTriggerSpec:
     config = task.trigger_config
-    if task.trigger_type == TriggerType.ONCE:
-        return OnceTrigger(run_at=datetime.fromisoformat(config["run_at"]))
-    if task.trigger_type == TriggerType.CRON:
-        return CronTriggerSpec(
-            expression=config["expression"],
-            timezone=config.get("timezone", "UTC"),
-        )
-    if task.trigger_type == TriggerType.INTERVAL:
-        return IntervalTriggerSpec(seconds=config["seconds"])
-    raise ValueError(f"Unsupported trigger type: {task.trigger_type}")
+    match task.trigger_type:
+        case TriggerType.ONCE:
+            return OnceTrigger(run_at=datetime.fromisoformat(config["run_at"]))
+        case TriggerType.CRON:
+            return CronTriggerSpec(
+                expression=config["expression"],
+                timezone=config.get("timezone", "UTC"),
+            )
+        case TriggerType.INTERVAL:
+            return IntervalTriggerSpec(seconds=config["seconds"])
+        case _:
+            raise ValueError(f"Unsupported trigger type: {task.trigger_type}")
 
 
 def trigger_config_from_spec(spec: StructuredTriggerSpec) -> TriggerConfig:
-    if isinstance(spec, OnceTrigger):
-        run_at = spec.run_at
-        if run_at.tzinfo is None:
-            run_at = run_at.replace(tzinfo=timezone.utc)
-        return OnceTriggerConfig(run_at=run_at.isoformat())
-    if isinstance(spec, CronTriggerSpec):
-        return CronTriggerConfig(expression=spec.expression, timezone=spec.timezone)
-    if isinstance(spec, IntervalTriggerSpec):
-        return IntervalTriggerConfig(seconds=spec.seconds)
-    raise ValueError(f"Unsupported trigger type: {spec}")
+    match spec:
+        case OnceTrigger(run_at=run_at):
+            if run_at.tzinfo is None:
+                run_at = run_at.replace(tzinfo=timezone.utc)
+            return OnceTriggerConfig(run_at=run_at.isoformat())
+        case CronTriggerSpec(expression=expression, timezone=tz):
+            return CronTriggerConfig(expression=expression, timezone=tz)
+        case IntervalTriggerSpec(seconds=seconds):
+            return IntervalTriggerConfig(seconds=seconds)
+        case _:
+            raise ValueError(f"Unsupported trigger type: {spec}")
 
 
 def compute_next_run_at(spec: StructuredTriggerSpec) -> datetime | None:

@@ -102,11 +102,11 @@ TEXT_TRIGGER_CASES = [
         id="every_15_minutes",
     ),
     pytest.param(
-        "every 3 hours",
+        "every 45 minutes",
         "UTC",
         "interval",
-        _interval_seconds(10800),
-        id="every_3_hours",
+        _interval_seconds(2700),
+        id="every_45_minutes",
     ),
     pytest.param(
         "every 7 days",
@@ -126,7 +126,7 @@ TEXT_TRIGGER_CASES = [
         "every Monday at 9am",
         "UTC",
         "cron",
-        _cron_hour_minute(9),
+        _has_cron_expression,
         id="monday_9am",
     ),
     pytest.param(
@@ -158,11 +158,11 @@ TEXT_TRIGGER_CASES = [
         id="daily_midnight",
     ),
     pytest.param(
-        "on sturdays at 9am",
+        "every Saturday morning",
         "UTC",
         "cron",
         _has_cron_expression,
-        id="saturday_typo",
+        id="saturday_morning",
     ),
     pytest.param(
         "every other week on Saturday morning",

@@ -17,7 +17,16 @@ def _mock_llm_response(content: dict) -> MagicMock:
 
     response = MagicMock()
     response.choices = [MagicMock()]
-    response.choices[0].message.content = json.dumps(content)
+    response.choices[0].message.content = json.dumps(
+        {
+            "_thought": "test reasoning",
+            "type": content["type"],
+            "cron_expr": content.get("expression"),
+            "interval_value": content.get("interval_value"),
+            "interval_unit": content.get("interval_unit"),
+            "once_datetime": content.get("run_at"),
+        }
+    )
     return response
 
 
@@ -25,7 +34,7 @@ def _mock_llm_response(content: dict) -> MagicMock:
 @patch("app.services.trigger_parse.completion")
 def test_create_task_with_text_trigger(mock_completion, client, auth_headers_frozen):
     mock_completion.return_value = _mock_llm_response(
-        {"type": "cron", "expression": "0 9 * * *", "timezone": "UTC"}
+        {"type": "cron", "expression": "0 9 * * *"}
     )
 
     response = client.post(
