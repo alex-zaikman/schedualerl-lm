@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
-from app.enums import SortOrder, TaskSortField, TriggerType
+from app.enums import ExecutionSource, SortOrder, TaskSortField, TriggerType
 
 
 class OnceTrigger(BaseModel):
@@ -203,7 +203,19 @@ class TaskListResponse(BaseModel):
 
 class TaskRunResponse(BaseModel):
     task_id: str = Field(description="Task UUID.")
-    http_status: int = Field(description="HTTP status code returned by the webhook.")
+    execution_source: ExecutionSource = Field(
+        description="Always `manual` for this endpoint.",
+    )
+    webhook_url: str = Field(description="Webhook URL that was called.")
+    http_status: int | None = Field(
+        default=None,
+        description="HTTP status code from the webhook, when a response was received.",
+    )
+    error_message: str | None = Field(
+        default=None,
+        description="Error detail when the webhook call failed.",
+    )
+    success: bool = Field(description="Whether the webhook returned a 2xx status.")
 
 
 class TaskScheduleQuery(BaseModel):

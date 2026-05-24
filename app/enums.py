@@ -29,3 +29,16 @@ class LogLevel(StrEnum):
     WARNING = "WARNING"
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
+
+
+class TaskHistoryEventType(StrEnum):
+    TASK_CREATED = "task_created"
+    TASK_ACTIVATED = "task_activated"
+    TASK_DEACTIVATED = "task_deactivated"
+    TASK_DELETED = "task_deleted"
+    EXECUTION = "execution"
+
+
+class ExecutionSource(StrEnum):
+    SCHEDULED = "scheduled"
+    MANUAL = "manual"

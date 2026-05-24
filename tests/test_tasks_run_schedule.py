@@ -52,7 +52,10 @@ def test_run_task_fires_webhook(client, test_settings, auth_headers_frozen):
     assert response.status_code == 200
     body = response.json()
     assert body["task_id"] == task_id
+    assert body["execution_source"] == "manual"
+    assert body["success"] is True
     assert body["http_status"] == 200
+    assert body["webhook_url"] == "https://example.com/hook"
 
     payload = decode_token(
         captured["authorization"].removeprefix("Bearer "),
@@ -92,8 +95,10 @@ def test_run_task_on_paused_task(client, test_settings, auth_headers_frozen):
         f"/api/v1/tasks/{task_id}/run",
         headers=auth_headers_frozen,
     )
-    assert response.status_code == 200
-    assert response.json()["http_status"] == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["http_status"] == 200
+    assert body["execution_source"] == "manual"
 
     task_response = client.get(
         "/api/v1/tasks?active_only=false",

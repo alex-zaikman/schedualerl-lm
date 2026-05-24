@@ -10,6 +10,7 @@ from app.config.settings import DatabaseSettings
 from app.db.base import Base
 from app.db.migrations import get_db_settings_override
 from app.db.models.scheduled_task import ScheduledTask  # noqa: F401
+from app.db.models.task_history import TaskHistory  # noqa: F401
 
 config = context.config
 

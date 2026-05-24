@@ -11,6 +11,7 @@ FastAPI service that persists schedules in PostgreSQL (APScheduler), parses natu
 - **Cron is hard** — describe schedules in plain language (`"every day at 9am"`) instead of memorizing cron syntax.
 - **Webhook-first** — at fire time the executor calls your URL with query parameters and a scoped JWT; no polling required.
 - **Durable** — schedules survive restarts; APScheduler stores state in PostgreSQL with row-level security per user.
+- **Audit trail** — append-only task history records creates, lifecycle changes, deletions, and webhook executions.
 
 ## Who it's for
 
@@ -67,7 +68,7 @@ Client (JWT) → FastAPI → APScheduler (Postgres) → webhook GET + short-live
 
 | Layer              | Module                                                           |
 | ------------------ | ---------------------------------------------------------------- |
-| HTTP API           | `[app/routes/tasks.py](app/routes/tasks.py)`                     |
+| HTTP API           | `[app/routes/tasks.py](app/routes/tasks.py)`, `[app/routes/history.py](app/routes/history.py)` |
 | NL trigger parsing | `[app/services/trigger_parse.py](app/services/trigger_parse.py)` |
 | Webhook execution  | `[app/scheduler/executor.py](app/scheduler/executor.py)`         |
 

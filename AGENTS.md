@@ -91,6 +91,9 @@ Use the OpenAPI schema as the source of truth for request/response shapes.
 | `POST` | `/api/v1/tasks/{task_id}/run` | Fire webhook immediately (test/debug) |
 | `POST` | `/api/v1/tasks/{task_id}/activate` | Resume a paused task |
 | `POST` | `/api/v1/tasks/{task_id}/deactivate` | Pause a task |
+| `DELETE` | `/api/v1/tasks/{task_id}` | Delete a task (history retained) |
+| `GET` | `/api/v1/history` | List audit history (filter, paginate) |
+| `GET` | `/api/v1/tasks/{task_id}/history` | History for one task (works after delete) |
 | `POST` | `/api/v1/triggers/parse` | Parse natural-language schedule text |
 
 ### Trigger types
@@ -184,7 +187,11 @@ Response shape:
 ```json
 {
   "task_id": "...",
-  "http_status": 200
+  "execution_source": "manual",
+  "webhook_url": "https://example.com/hook",
+  "http_status": 200,
+  "error_message": null,
+  "success": true
 }
 ```
 
@@ -205,6 +212,32 @@ curl -X POST \
 ```
 
 Returns 422 if the task cannot be scheduled (e.g. an expired `once` task).
+#### Query task history
+
+```bash
+curl -H "Authorization: Bearer $TOKEN"   "http://localhost:8000/api/v1/history?event_type=execution&limit=50&offset=0"
+```
+
+Optional query params: `event_type` (`task_created`, `task_activated`, `task_deactivated`, `task_deleted`, `execution`), `task_id`, `since`, `until`, `order` (`asc`, `desc`).
+
+Each item is typed by `event_type`. Execution entries include `execution_source` (`scheduled` or `manual`), `webhook_url`, `http_status`, `error_message`, and `success`. Skipped scheduled runs (inactive or missing task) are not logged.
+
+#### Query history for a task (including after delete)
+
+```bash
+curl -H "Authorization: Bearer $TOKEN"   "http://localhost:8000/api/v1/tasks/{task_id}/history?event_type=execution"
+```
+
+Works even when the task row has been deleted. Unknown or other-user task ids return an empty list.
+
+#### Delete a task
+
+```bash
+curl -X DELETE   -H "Authorization: Bearer $TOKEN"   "http://localhost:8000/api/v1/tasks/{task_id}"
+```
+
+Returns `204`. Records a `task_deleted` event and removes the task from the scheduler. History is retained.
+
 
 ### Webhook behavior
 

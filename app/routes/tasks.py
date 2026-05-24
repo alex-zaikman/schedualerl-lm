@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-import httpx
 from apscheduler import AsyncScheduler
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -14,7 +13,13 @@ from app.config.dependencies import get_app_settings
 from app.config.settings import Settings
 from app.db.dependencies import get_db
 from app.db.models.scheduled_task import ScheduledTask
-from app.enums import SortOrder, TaskSortField, TriggerType
+from app.enums import (
+    ExecutionSource,
+    SortOrder,
+    TaskHistoryEventType,
+    TaskSortField,
+    TriggerType,
+)
 from app.scheduler.dependencies import get_scheduler
 from app.scheduler.executor import run_task_manually
 from app.scheduler.service import register_schedule, unregister_schedule
@@ -24,6 +29,7 @@ from app.scheduler.triggers import (
     compute_upcoming_run_times,
     trigger_config_from_spec,
 )
+from app.schemas.execution import webhook_fire_result
 from app.schemas.tasks import (
     TaskCreate,
     TaskListQuery,
@@ -32,6 +38,12 @@ from app.schemas.tasks import (
     TaskRunResponse,
     TaskScheduleQuery,
     TaskScheduleResponse,
+)
+from app.services.task_history import (
+    record_execution,
+    record_task_created,
+    record_task_deleted,
+    record_task_lifecycle,
 )
 from app.services.trigger_parse import TriggerParseError, resolve_trigger_spec
 
@@ -128,6 +140,8 @@ async def create_task(
     await session.flush()
     await session.refresh(task)
 
+    await record_task_created(session, user_id=user.user_id, task=task)
+
     background_tasks.add_task(register_schedule, scheduler, task)
 
     return _to_response(task)
@@ -212,19 +226,49 @@ async def run_task(
     session: AsyncSession = Depends(get_db),
 ) -> TaskRunResponse:
     task = await _get_task_or_404(session, task_id)
-    try:
-        http_status = await run_task_manually(str(task.id))
-    except httpx.HTTPStatusError as exc:
+    user_id = session.info.get("current_user_id")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing user context",
+        )
+
+    outcome = await run_task_manually(str(task.id))
+    fire_result = webhook_fire_result(
+        execution_source=ExecutionSource.MANUAL,
+        webhook_url=task.webhook_url,
+        outcome=outcome,
+    )
+    await record_execution(
+        session,
+        user_id=user_id,
+        task_id=task.id,
+        execution_source=fire_result.execution_source,
+        webhook_url=fire_result.webhook_url,
+        success=fire_result.success,
+        http_status=fire_result.http_status,
+        error_message=fire_result.error_message,
+    )
+    await session.commit()
+
+    if not fire_result.success:
+        if fire_result.http_status is not None:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Webhook returned {fire_result.http_status}",
+            )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Webhook returned {exc.response.status_code}",
-        ) from exc
-    except httpx.RequestError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Webhook request failed: {exc}",
-        ) from exc
-    return TaskRunResponse(task_id=str(task.id), http_status=http_status)
+            detail=fire_result.error_message or "Webhook request failed",
+        )
+    return TaskRunResponse(
+        task_id=str(task.id),
+        execution_source=fire_result.execution_source,
+        webhook_url=fire_result.webhook_url,
+        http_status=fire_result.http_status,
+        error_message=fire_result.error_message,
+        success=fire_result.success,
+    )
 
 
 @router.post(
@@ -247,6 +291,14 @@ async def deactivate_task(
     if task.is_active:
         task.is_active = False
         task.next_run_at = None
+        user_id = session.info.get("current_user_id")
+        if user_id is not None:
+            await record_task_lifecycle(
+                session,
+                user_id=user_id,
+                task_id=task.id,
+                event_type=TaskHistoryEventType.TASK_DEACTIVATED,
+            )
         background_tasks.add_task(unregister_schedule, scheduler, task_id)
 
     return _to_response(task)
@@ -285,6 +337,43 @@ async def activate_task(
 
     task.is_active = True
     task.next_run_at = next_run_at
+    user_id = session.info.get("current_user_id")
+    if user_id is not None:
+        await record_task_lifecycle(
+            session,
+            user_id=user_id,
+            task_id=task.id,
+            event_type=TaskHistoryEventType.TASK_ACTIVATED,
+        )
     background_tasks.add_task(register_schedule, scheduler, task)
 
     return _to_response(task)
+
+@router.delete(
+    "/tasks/{task_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a scheduled task",
+    description=(
+        "Permanently deletes a task and removes it from the scheduler. "
+        "Audit history for the task is retained."
+    ),
+)
+async def delete_task(
+    task_id: UUID,
+    background_tasks: BackgroundTasks,
+    scheduler: AsyncScheduler = Depends(get_scheduler),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    task = await _get_task_or_404(session, task_id)
+    user_id = session.info.get("current_user_id")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing user context",
+        )
+
+    if task.is_active:
+        background_tasks.add_task(unregister_schedule, scheduler, task_id)
+
+    await record_task_deleted(session, user_id=user_id, task=task)
+    await session.delete(task)
