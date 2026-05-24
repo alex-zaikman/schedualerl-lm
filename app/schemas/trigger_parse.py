@@ -92,8 +92,17 @@ def trigger_spec_from_llm_output(
 
 
 class TriggerParseRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=2000)
-    timezone: str = "UTC"
+    text: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Natural-language schedule text to parse into a structured trigger.",
+        examples=["every day at 9am", "every 2 hours"],
+    )
+    timezone: str = Field(
+        default="UTC",
+        description="IANA timezone name used when parsing relative or local-time phrases.",
+        examples=["UTC", "America/New_York"],
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -103,6 +112,12 @@ class TriggerParseRequest(BaseModel):
 
 
 class TriggerParseResponse(BaseModel):
-    trigger_type: TriggerType
-    trigger_config: TriggerConfig
-    next_run_at: datetime | None
+    trigger_type: TriggerType = Field(
+        description="Parsed trigger kind (`once`, `cron`, or `interval`).",
+    )
+    trigger_config: TriggerConfig = Field(
+        description="Structured trigger configuration matching `trigger_type`.",
+    )
+    next_run_at: datetime | None = Field(
+        description="Next scheduled fire time in UTC, or null if none can be computed.",
+    )

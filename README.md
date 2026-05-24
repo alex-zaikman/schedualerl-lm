@@ -2,6 +2,8 @@
 
 FastAPI service that schedules webhook GET calls. Tasks accept structured triggers (`once`, `cron`, `interval`) or natural-language text parsed by an LLM via LiteLLM. APScheduler persists schedules in PostgreSQL; at fire time the executor calls the webhook with a short-lived JWT for the owning user. API routes are JWT-protected.
 
+For LLM agent usage, see [AGENTS.md](AGENTS.md).
+
 Endpoints:
 
 - `GET /health`

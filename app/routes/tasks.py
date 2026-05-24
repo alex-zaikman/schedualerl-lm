@@ -54,7 +54,18 @@ def _to_response(task: ScheduledTask) -> TaskResponse:
     )
 
 
-@router.post("/tasks", status_code=201, response_model=TaskResponse)
+@router.post(
+    "/tasks",
+    status_code=201,
+    response_model=TaskResponse,
+    summary="Create a scheduled task",
+    description=(
+        "Creates a task that fires an HTTP GET to `webhook_url` on the given schedule. "
+        "Prefer `trigger.type: \"text\"` for natural language (e.g. 'every day at 9am'); "
+        "use structured types (`once`, `cron`, `interval`) when the schedule is exact. "
+        "`once` tasks deactivate after firing; `cron` and `interval` tasks repeat until deactivated."
+    ),
+)
 async def create_task(
     body: TaskCreate,
     background_tasks: BackgroundTasks,
@@ -91,7 +102,16 @@ async def create_task(
     return _to_response(task)
 
 
-@router.get("/tasks", response_model=TaskListResponse)
+@router.get(
+    "/tasks",
+    response_model=TaskListResponse,
+    summary="List scheduled tasks",
+    description=(
+        "Returns paginated tasks owned by the authenticated user. "
+        "By default only active tasks are returned (`active_only=true`). "
+        "Use `limit` and `offset` for pagination."
+    ),
+)
 async def list_tasks(
     query: TaskListQuery = Depends(),
     session: AsyncSession = Depends(get_db),
@@ -119,7 +139,15 @@ async def list_tasks(
     )
 
 
-@router.post("/tasks/{task_id}/deactivate", response_model=TaskResponse)
+@router.post(
+    "/tasks/{task_id}/deactivate",
+    response_model=TaskResponse,
+    summary="Pause a scheduled task",
+    description=(
+        "Deactivates a task and removes it from the scheduler. "
+        "The task row is retained and can be resumed with activate."
+    ),
+)
 async def deactivate_task(
     task_id: UUID,
     background_tasks: BackgroundTasks,
@@ -136,7 +164,15 @@ async def deactivate_task(
     return _to_response(task)
 
 
-@router.post("/tasks/{task_id}/activate", response_model=TaskResponse)
+@router.post(
+    "/tasks/{task_id}/activate",
+    response_model=TaskResponse,
+    summary="Resume a paused task",
+    description=(
+        "Reactivates a deactivated task and recomputes `next_run_at` from the stored trigger. "
+        "Returns 422 if the task cannot be scheduled (e.g. an expired `once` task)."
+    ),
+)
 async def activate_task(
     task_id: UUID,
     background_tasks: BackgroundTasks,

@@ -7,6 +7,14 @@ from app.schemas.api import MeResponse
 router = APIRouter(tags=["api"])
 
 
-@router.get("/me", response_model=MeResponse)
+@router.get(
+    "/me",
+    response_model=MeResponse,
+    summary="Get authenticated user id",
+    description=(
+        "Returns the `sub` claim from the Bearer JWT. "
+        "Use this to verify authentication before calling other endpoints."
+    ),
+)
 async def me(user: CurrentUser = Depends(get_current_user)) -> MeResponse:
     return MeResponse(user_id=user.user_id)
