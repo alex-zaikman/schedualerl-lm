@@ -56,7 +56,7 @@ async def create_task(
         is_active=True,
     )
     session.add(task)
-    await session.commit()
+    await session.flush()
     await session.refresh(task)
 
     scheduler = request.app.state.scheduler

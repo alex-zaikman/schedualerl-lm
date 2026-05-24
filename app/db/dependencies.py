@@ -14,4 +14,9 @@ async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
         session.info["current_user_id"] = user_id
         if user_id:
             await set_user_rls(session, user_id)
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

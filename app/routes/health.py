@@ -15,6 +15,7 @@ async def health(
     try:
         await session.execute(text("SELECT 1"))
     except Exception:
+        await session.rollback()
         response.status_code = 503
         return {"status": "unavailable"}
     return {"status": "ok"}
