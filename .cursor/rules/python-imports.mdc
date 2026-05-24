@@ -1,0 +1,37 @@
+---
+description: Python import conventions
+globs: **/*.py
+alwaysApply: false
+---
+
+# Python Imports
+
+## Never use `__all__`
+
+Do not define `__all__` in any module. Import from the defining module instead of re-exporting through package barrels.
+
+```python
+# ❌ BAD
+__all__ = []
+__all__ = ["Settings", "get_settings"]
+
+# ✅ GOOD
+from app.config.settings import Settings, get_settings
+```
+
+## Use full imports from defining modules
+
+Import symbols from the module where they are defined. Do not rely on package `__init__.py` re-exports or wildcard imports.
+
+```python
+# ❌ BAD
+from app.config import get_settings
+from app.db.models import Base
+from app.config.settings import *
+
+# ✅ GOOD
+from app.config.settings import get_settings
+from app.db.base import Base
+```
+
+When adding or updating imports, trace the symbol to its source module and import from there.
