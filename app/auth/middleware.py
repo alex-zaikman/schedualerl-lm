@@ -1,4 +1,5 @@
 import jwt
+from fastapi import status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -21,7 +22,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         header = request.headers.get("Authorization")
         if not header or not header.startswith("Bearer "):
             return JSONResponse(
-                status_code=401,
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Missing bearer token"},
             )
 
@@ -30,11 +31,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             user_id = payload.get("sub")
             if not user_id:
                 return JSONResponse(
-                    status_code=401,
+                    status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": "Missing sub claim"},
                 )
             request.state.user_id = str(user_id)
         except jwt.PyJWTError:
-            return JSONResponse(status_code=401, content={"detail": "Invalid token"})
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Invalid token"},
+            )
 
         return await call_next(request)

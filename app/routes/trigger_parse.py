@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config.dependencies import get_app_settings
 from app.config.settings import Settings
@@ -28,4 +28,6 @@ async def parse_trigger(
             timezone=body.timezone,
         )
     except TriggerParseError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc

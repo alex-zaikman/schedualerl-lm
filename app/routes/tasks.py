@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from apscheduler import AsyncScheduler
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +35,7 @@ async def _get_task_or_404(session: AsyncSession, task_id: UUID) -> ScheduledTas
     )
     task = result.scalar_one_or_none()
     if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return task
 
 
@@ -56,7 +56,7 @@ def _to_response(task: ScheduledTask) -> TaskResponse:
 
 @router.post(
     "/tasks",
-    status_code=201,
+    status_code=status.HTTP_201_CREATED,
     response_model=TaskResponse,
     summary="Create a scheduled task",
     description=(
@@ -77,7 +77,9 @@ async def create_task(
     try:
         trigger = resolve_trigger_spec(body.trigger, settings.llm)
     except TriggerParseError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
     trigger_type = trigger.type
     trigger_config = trigger_config_from_spec(trigger)
@@ -189,7 +191,10 @@ async def activate_task(
         task.trigger_type == TriggerType.ONCE
         and next_run_at <= datetime.now(timezone.utc)
     ):
-        raise HTTPException(status_code=422, detail="Task cannot be activated")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Task cannot be activated",
+        )
 
     task.is_active = True
     task.next_run_at = next_run_at
