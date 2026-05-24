@@ -9,6 +9,7 @@ from alembic import context
 
 from app.config.settings import DatabaseSettings
 from app.db.base import Base
+from app.db.migrations import get_db_settings_override
 
 config = context.config
 
@@ -19,6 +20,9 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
+    override = get_db_settings_override()
+    if override is not None:
+        return override.async_url
     return DatabaseSettings().async_url
 
 
