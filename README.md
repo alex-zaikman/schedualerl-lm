@@ -2,42 +2,19 @@
 
 FastAPI service that schedules webhook GET calls. Tasks accept structured triggers (`once`, `cron`, `interval`) or natural-language text parsed by an LLM via LiteLLM. APScheduler persists schedules in PostgreSQL; at fire time the executor calls the webhook with a short-lived JWT for the owning user. API routes are JWT-protected.
 
-For LLM agent usage, see [AGENTS.md](AGENTS.md).
-
-Endpoints:
-
-- `GET /health`
-- `GET /api/v1/me`
-- `POST /api/v1/tasks` — create a scheduled task
-- `GET /api/v1/tasks` — list tasks (`active_only`, `limit`, `offset`)
-- `POST /api/v1/tasks/{task_id}/activate` — resume a deactivated task
-- `POST /api/v1/tasks/{task_id}/deactivate` — pause a task
-- `POST /api/v1/triggers/parse` — parse natural-language schedule text
+For endpoints, auth flows, curl examples, and agent-oriented API usage, see [AGENTS.md](AGENTS.md).
 
 ## Webhooks
 
-Creating a task stores a `webhook_url`, optional `parameters` (query string), and a trigger. At fire time the executor sends an HTTP GET to that URL with `parameters` as query params. There is no request body. Non-2xx responses fail the run. Timeout is `SCHEDULER_WEBHOOK_TIMEOUT_SECONDS` (default 30).
+At fire time the executor sends an HTTP GET to the task's `webhook_url` with `parameters` as query params. There is no request body. Non-2xx responses fail the run. Timeout is `SCHEDULER_WEBHOOK_TIMEOUT_SECONDS` (default 30).
 
-`once` tasks deactivate and are removed from the scheduler after they fire. `cron` and `interval` tasks keep running until deactivated.
-
-Use `POST /api/v1/tasks/{task_id}/deactivate` to pause a task and `POST /api/v1/tasks/{task_id}/activate` to resume it. Activation recomputes `next_run_at` from the stored trigger; expired `once` tasks (past `run_at`) return 422.
-
-`GET /api/v1/tasks` returns paginated results: `{ "items": [...], "total": N, "limit": 50, "offset": 0 }`. Query params: `active_only` (default `true`), `limit` (1–100, default 50), `offset` (default 0).
+Webhook JWT TTL is `SCHEDULER_WEBHOOK_JWT_TTL_MINUTES` (default 5). If your webhook service trusts `AUTH_JWT_SECRET`, it can verify the token and act on behalf of the task creator (`sub` claim). See [AGENTS.md](AGENTS.md#webhook-behavior) for claim details.
 
 ## Auth
 
-**API calls.** Routes under `/api/v1` require `Authorization: Bearer <token>`. The middleware validates the JWT with `AUTH_JWT_SECRET` and reads `sub` as the user id. Task creation stores that user id on the row; tasks are scoped to the creator.
+Routes under `/api/v1` require `Authorization: Bearer <token>`. The middleware validates the JWT with `AUTH_JWT_SECRET` and reads `sub` as the user id. Tasks are scoped to the creator.
 
-**Webhook calls.** The scheduler does not forward your API token. At fire time it mints a new short-lived JWT signed with the same secret and sends it as `Authorization: Bearer <token>` on the GET to your webhook.
-
-Webhook JWT claims:
-
-- `sub` — user id of the task creator
-- `task_id` — scheduled task UUID
-- `purpose` — `"webhook"`
-- `exp` — `SCHEDULER_WEBHOOK_JWT_TTL_MINUTES` (default 5)
-
-If your webhook service trusts `AUTH_JWT_SECRET`, it can verify the token and act on behalf of `sub`.
+The scheduler does not forward your API token on webhook calls; it mints a separate short-lived JWT at fire time.
 
 ## Requirements
 

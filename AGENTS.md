@@ -1,12 +1,48 @@
 # Agent guide for schedulerlm
 
-This document helps LLM agents call the schedulerlm API. For human setup and deployment, see [README.md](README.md).
+Guide for AI agents **developing** this repo and **calling** its HTTP API. Human setup, deployment, and environment variables: [README.md](README.md).
 
-## Base URL
+## Developing this repo
+
+FastAPI service that schedules webhook GET calls via APScheduler with PostgreSQL persistence. Natural-language triggers are parsed with LiteLLM.
+
+### Setup
+
+```bash
+cp .env.example .env
+uv sync
+docker compose up -d db
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+See [README.md](README.md) for the full Docker stack, Ollama, and `.env` configuration.
+
+### Tests and lint
+
+Run before finishing code changes (matches [CI](.github/workflows/ci.yml)):
+
+```bash
+uv run pytest
+uv run isort --check-only --diff app tests scripts alembic
+uv run pylint app tests scripts
+```
+
+Integration tests need Docker (testcontainers). Ollama-dependent tests skip if the model is unavailable.
+
+### Code conventions
+
+- **Tenacity:** Use the `@retry` decorator; do not use manual retry loops or imperative `Retrying` / `AsyncRetrying` (see `app/services/trigger_parse.py`, `app/db/engine.py`).
+- **Imports:** Never define `__all__`. Import symbols from the module where they are defined, not package barrels or wildcards.
+- **Pattern matching:** Prefer `match` / `case` over long `if` / `elif` / `isinstance` chains when dispatching on enums, literals, or typed variants.
+
+## Using the API
+
+### Base URL
 
 Default local: `http://localhost:8000`
 
-## Authentication
+### Authentication
 
 All `/api/v1` routes require a JWT Bearer token:
 
@@ -34,7 +70,7 @@ Expected response:
 {"user_id": "user-123"}
 ```
 
-## OpenAPI
+### OpenAPI
 
 Machine-readable API contract:
 
@@ -43,7 +79,7 @@ Machine-readable API contract:
 
 Use the OpenAPI schema as the source of truth for request/response shapes.
 
-## Endpoints
+### Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -55,7 +91,7 @@ Use the OpenAPI schema as the source of truth for request/response shapes.
 | `POST` | `/api/v1/tasks/{task_id}/deactivate` | Pause a task |
 | `POST` | `/api/v1/triggers/parse` | Parse natural-language schedule text |
 
-## Trigger types
+### Trigger types
 
 When creating a task (`POST /api/v1/tasks`), set `trigger` to one of:
 
@@ -72,9 +108,9 @@ When creating a task (`POST /api/v1/tasks`), set `trigger` to one of:
 
 `once` tasks deactivate after firing. `cron` and `interval` tasks repeat until deactivated.
 
-## Workflows
+### Workflows
 
-### Schedule a webhook every day at 9am
+#### Schedule a webhook every day at 9am
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/tasks \
@@ -91,7 +127,7 @@ curl -X POST http://localhost:8000/api/v1/tasks \
   }'
 ```
 
-### Preview a schedule before creating a task
+#### Preview a schedule before creating a task
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/triggers/parse \
@@ -102,7 +138,7 @@ curl -X POST http://localhost:8000/api/v1/triggers/parse \
 
 Returns `trigger_type`, `trigger_config`, and `next_run_at` without creating a task.
 
-### List active tasks
+#### List active tasks
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
@@ -120,7 +156,7 @@ Response shape:
 }
 ```
 
-### Pause a task
+#### Pause a task
 
 ```bash
 curl -X POST \
@@ -128,7 +164,7 @@ curl -X POST \
   "http://localhost:8000/api/v1/tasks/{task_id}/deactivate"
 ```
 
-### Resume a paused task
+#### Resume a paused task
 
 ```bash
 curl -X POST \
@@ -138,7 +174,7 @@ curl -X POST \
 
 Returns 422 if the task cannot be scheduled (e.g. an expired `once` task).
 
-## Webhook behavior
+### Webhook behavior
 
 When a task fires, the executor sends an HTTP GET to `webhook_url` with:
 
@@ -147,7 +183,7 @@ When a task fires, the executor sends an HTTP GET to `webhook_url` with:
 
 Webhook JWT claims: `sub` (user id), `task_id`, `purpose: "webhook"`, `exp`.
 
-## Error codes
+### Error codes
 
 | Status | Meaning |
 |--------|---------|
@@ -155,7 +191,7 @@ Webhook JWT claims: `sub` (user id), `task_id`, `purpose: "webhook"`, `exp`.
 | `404` | Task not found (or not owned by the user) |
 | `422` | Validation or trigger parse failure; see `detail` in the response body |
 
-## Task create request shape
+### Task create request shape
 
 ```json
 {
