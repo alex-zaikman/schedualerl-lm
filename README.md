@@ -1,8 +1,76 @@
 # schedulerlm
 
-FastAPI service that schedules webhook GET calls. Tasks accept structured triggers (`once`, `cron`, `interval`) or natural-language text parsed by an LLM via LiteLLM. APScheduler persists schedules in PostgreSQL; at fire time the executor calls the webhook with a short-lived JWT for the owning user. API routes are JWT-protected.
+[![CI](https://github.com/alex-zaikman/schedualerl-lm/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-zaikman/schedualerl-lm/actions/workflows/ci.yml)
 
-For endpoints, auth flows, curl examples, and agent-oriented API usage, see [AGENTS.md](AGENTS.md).
+Schedule webhooks with cron, intervals, or plain English — powered by LiteLLM.
+
+FastAPI service that persists schedules in PostgreSQL (APScheduler), parses natural-language triggers via an LLM, and fires webhook GET calls with a short-lived JWT for the task owner.
+
+## Why schedulerlm
+
+- **Cron is hard** — describe schedules in plain language (`"every day at 9am"`) instead of memorizing cron syntax.
+- **Webhook-first** — at fire time the executor calls your URL with query parameters and a scoped JWT; no polling required.
+- **Durable** — schedules survive restarts; APScheduler stores state in PostgreSQL with row-level security per user.
+
+## Who it's for
+
+- Automation builders and AI agents scheduling callbacks
+- Side projects and internal tools that need reliable timed webhooks
+- Teams that want a self-hosted scheduler API without running a full cron-as-a-service platform
+
+Not a fit (yet) if you need a UI dashboard, multi-region HA, or managed SaaS.
+
+## Quick demo
+
+Start the stack (app, Postgres, Ollama for text triggers):
+
+```bash
+docker compose up --build
+```
+
+Mint a dev JWT, create a task, and list it. Use [webhook.site](https://webhook.site) to inspect fired webhooks (copy your unique URL from the page):
+
+```bash
+export TOKEN=$(uv run python scripts/mint_dev_jwt.py --sub user-123)
+export WEBHOOK_URL=https://webhook.site/your-unique-id   # from webhook.site
+
+curl -X POST http://localhost:8000/api/v1/tasks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"webhook_url\": \"$WEBHOOK_URL\",
+    \"parameters\": {\"source\": \"schedulerlm\"},
+    \"trigger\": {
+      \"type\": \"text\",
+      \"text\": \"every day at 9am\",
+      \"timezone\": \"UTC\"
+    }
+  }"
+
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/tasks?active_only=true"
+```
+
+Interactive API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+Runnable script: [examples/create_daily_task.sh](examples/create_daily_task.sh) (requires `WEBHOOK_URL` from [webhook.site](https://webhook.site)).
+
+For full endpoint reference, curl examples, and agent-oriented usage, see [AGENTS.md](AGENTS.md).
+
+## Architecture
+
+```text
+Client (JWT) → FastAPI → APScheduler (Postgres) → webhook GET + short-lived JWT
+                    ↘ LiteLLM (text triggers)
+```
+
+
+| Layer              | Module                                                           |
+| ------------------ | ---------------------------------------------------------------- |
+| HTTP API           | `[app/routes/tasks.py](app/routes/tasks.py)`                     |
+| NL trigger parsing | `[app/services/trigger_parse.py](app/services/trigger_parse.py)` |
+| Webhook execution  | `[app/scheduler/executor.py](app/scheduler/executor.py)`         |
+
 
 ## Webhooks
 
@@ -81,3 +149,7 @@ uv run isort --check-only --diff app tests scripts alembic  # check import order
 uv run isort app tests scripts alembic                      # fix import order
 uv run pylint app tests scripts
 ```
+
+## License
+
+MIT No Attribution — see [LICENSE](LICENSE).

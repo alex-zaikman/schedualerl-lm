@@ -1,8 +1,18 @@
 [project]
 name = "schedulerlm"
 version = "0.1.0"
-description = "Scheduler LM API"
+description = "Schedule webhooks with cron, intervals, or plain English — powered by LiteLLM."
+readme = "README.md"
+license = { text = "MIT-0" }
 requires-python = ">=3.12,<3.14"
+keywords = [
+    "scheduler",
+    "webhooks",
+    "litellm",
+    "fastapi",
+    "apscheduler",
+    "cron",
+]
 dependencies = [
     "fastapi>=0.136.3",
     "pydantic>=2.13.4",
