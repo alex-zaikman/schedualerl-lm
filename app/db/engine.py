@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from tenacity import (
-    AsyncRetrying,
     before_sleep_log,
+    retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_fixed,
@@ -30,37 +30,30 @@ class DatabaseConnectionError(Exception):
 def make_async_creator(settings: DatabaseSettings):
     """Factory returning an async_creator callable for create_async_engine."""
 
+    def _raise_connection_error(retry_state) -> None:
+        exc = retry_state.outcome.exception()
+        raise DatabaseConnectionError(
+            f"Failed to connect to PostgreSQL at {settings.host}:{settings.port}/{settings.name}"
+        ) from exc
+
+    @retry(
+        stop=stop_after_attempt(settings.connect_retries),
+        wait=wait_fixed(settings.connect_retry_delay),
+        retry=retry_if_exception_type(
+            (OSError, asyncio.TimeoutError, asyncpg.PostgresError, SQLAlchemyError)
+        ),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        retry_error_callback=_raise_connection_error,
+    )
     async def async_creator() -> asyncpg.Connection:
-        retrying = AsyncRetrying(
-            stop=stop_after_attempt(settings.connect_retries),
-            wait=wait_fixed(settings.connect_retry_delay),
-            retry=retry_if_exception_type(
-                (OSError, asyncio.TimeoutError, asyncpg.PostgresError, SQLAlchemyError)
-            ),
-            before_sleep=before_sleep_log(logger, logging.WARNING),
-            reraise=True,
+        return await asyncpg.connect(
+            host=settings.host,
+            port=settings.port,
+            user=settings.user,
+            password=settings.password.get_secret_value(),
+            database=settings.name,
+            timeout=settings.connect_timeout,
         )
-        try:
-            async for attempt in retrying:
-                with attempt:
-                    return await asyncpg.connect(
-                        host=settings.host,
-                        port=settings.port,
-                        user=settings.user,
-                        password=settings.password.get_secret_value(),
-                        database=settings.name,
-                        timeout=settings.connect_timeout,
-                    )
-        except (
-            OSError,
-            asyncio.TimeoutError,
-            asyncpg.PostgresError,
-            SQLAlchemyError,
-        ) as exc:
-            raise DatabaseConnectionError(
-                f"Failed to connect to PostgreSQL at {settings.host}:{settings.port}/{settings.name}"
-            ) from exc
-        raise DatabaseConnectionError("Failed to connect to PostgreSQL")
 
     return async_creator
 

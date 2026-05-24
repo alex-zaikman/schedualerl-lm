@@ -1,9 +1,11 @@
 import json
 import logging
 from datetime import datetime
+from typing import Any
 
 from litellm import completion
 from pydantic import TypeAdapter, ValidationError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
 
 from app.config.settings import LLMSettings
 from app.prompts.loader import PromptLoadError, load_prompt
@@ -53,7 +55,7 @@ def _call_llm(
     settings: LLMSettings,
     messages: list[dict[str, str]],
 ) -> str:
-    kwargs: dict = {
+    kwargs: dict[str, Any] = {
         "model": settings.model,
         "messages": messages,
         "api_base": settings.api_base,
@@ -94,34 +96,44 @@ def parse_trigger_text(
         },
     ]
 
-    last_error: str | None = None
     attempts = settings.max_retries + 1
 
-    for attempt in range(attempts):
-        try:
-            raw = _call_llm(settings, messages)
-            spec = _parse_trigger_json(raw)
-            trigger_type = spec.type
-            trigger_config = trigger_config_from_spec(spec)
-            next_run_at = compute_next_run_at(spec)
-            return trigger_type, trigger_config, next_run_at
-        except TriggerParseError as exc:
-            last_error = str(exc)
-            logger.warning(
-                "Trigger parse attempt %d/%d failed: %s",
-                attempt + 1,
-                attempts,
-                last_error,
-            )
-            if attempt < attempts - 1:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Your previous response was invalid: {last_error}. "
-                            "Return corrected JSON only."
-                        ),
-                    }
-                )
+    def _after_retry(retry_state) -> None:
+        if not retry_state.outcome.failed:
+            return
+        exc = retry_state.outcome.exception()
+        logger.warning(
+            "Trigger parse attempt %d/%d failed: %s",
+            retry_state.attempt_number,
+            attempts,
+            exc,
+        )
 
-    raise TriggerParseError(last_error or "Failed to parse trigger")
+    def _before_sleep(retry_state) -> None:
+        exc = retry_state.outcome.exception()
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Your previous response was invalid: {exc}. "
+                    "Return corrected JSON only."
+                ),
+            }
+        )
+
+    @retry(
+        stop=stop_after_attempt(attempts),
+        retry=retry_if_exception_type(TriggerParseError),
+        before_sleep=_before_sleep,
+        after=_after_retry,
+        reraise=True,
+    )
+    def _parse_once() -> tuple[str, dict, datetime | None]:
+        raw = _call_llm(settings, messages)
+        spec = _parse_trigger_json(raw)
+        trigger_type = spec.type
+        trigger_config = trigger_config_from_spec(spec)
+        next_run_at = compute_next_run_at(spec)
+        return trigger_type, trigger_config, next_run_at
+
+    return _parse_once()
