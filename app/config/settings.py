@@ -50,12 +50,20 @@ class DatabaseSettings(_EnvSettings):
         return f"postgresql+asyncpg://{self.user}:{pwd}@{self.host}:{self.port}/{self.name}"
 
 
+class SchedulerSettings(_EnvSettings):
+    model_config = SettingsConfigDict(env_prefix="SCHEDULER_")
+    webhook_jwt_ttl_minutes: int = 5
+    webhook_timeout_seconds: float = 30.0
+    scheduler_id: str | None = None
+
+
 class Settings(_EnvSettings):
     model_config = SettingsConfigDict(frozen=True)
     app: AppSettings = Field(default_factory=AppSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     log: LogSettings = Field(default_factory=LogSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    scheduler: SchedulerSettings = Field(default_factory=SchedulerSettings)
 
 
 @lru_cache

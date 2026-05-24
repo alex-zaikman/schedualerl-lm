@@ -9,6 +9,7 @@ from alembic import context
 
 from app.config.settings import DatabaseSettings
 from app.db.base import Base
+from app.db.models.scheduled_task import ScheduledTask  # noqa: F401
 from app.db.migrations import get_db_settings_override
 
 config = context.config

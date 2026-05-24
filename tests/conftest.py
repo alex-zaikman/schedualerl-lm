@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from testcontainers.postgres import PostgresContainer
 
-from app.config.settings import AppSettings, AuthSettings, DatabaseSettings, LogSettings, Settings
+from app.config.settings import AppSettings, AuthSettings, DatabaseSettings, LogSettings, SchedulerSettings, Settings
 from app.db.migrations import run_migrations
 from app.main import create_app
 
@@ -61,6 +61,7 @@ def test_settings(postgres_container: PostgresContainer, db_name: str) -> Settin
         auth=AuthSettings(jwt_secret=SecretStr(TEST_JWT_SECRET), jwt_algorithm="HS256"),
         log=LogSettings(level="WARNING"),
         db=_container_db_settings(postgres_container, db_name),
+        scheduler=SchedulerSettings(webhook_jwt_ttl_minutes=5, webhook_timeout_seconds=30.0),
     )
 
 
