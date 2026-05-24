@@ -3,4 +3,5 @@ pytest_plugins = [
     "tests.fixtures.app",
     "tests.fixtures.auth",
     "tests.fixtures.time",
+    "tests.fixtures.ollama",
 ]

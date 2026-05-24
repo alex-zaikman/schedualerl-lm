@@ -1,8 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.prompts.loader import DEFAULT_TRIGGER_PARSE_PROMPT_PATH
 
 
 class _EnvSettings(BaseSettings):
@@ -57,6 +60,16 @@ class SchedulerSettings(_EnvSettings):
     scheduler_id: str | None = None
 
 
+class LLMSettings(_EnvSettings):
+    model_config = SettingsConfigDict(env_prefix="LLM_")
+    model: str = "ollama/llama3.2"
+    api_base: str = "http://localhost:11434"
+    api_key: SecretStr | None = None
+    timeout_seconds: float = 30.0
+    max_retries: int = 2
+    trigger_parse_prompt_path: Path = DEFAULT_TRIGGER_PARSE_PROMPT_PATH
+
+
 class Settings(_EnvSettings):
     model_config = SettingsConfigDict(frozen=True)
     app: AppSettings = Field(default_factory=AppSettings)
@@ -64,6 +77,7 @@ class Settings(_EnvSettings):
     log: LogSettings = Field(default_factory=LogSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     scheduler: SchedulerSettings = Field(default_factory=SchedulerSettings)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
 
 
 @lru_cache

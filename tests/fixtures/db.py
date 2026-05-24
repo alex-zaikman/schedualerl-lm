@@ -6,7 +6,7 @@ import pytest
 from pydantic import SecretStr
 from testcontainers.postgres import PostgresContainer
 
-from app.config.settings import AppSettings, AuthSettings, DatabaseSettings, LogSettings, SchedulerSettings, Settings
+from app.config.settings import AppSettings, AuthSettings, DatabaseSettings, LLMSettings, LogSettings, SchedulerSettings, Settings
 from app.db.migrations import run_migrations
 from tests.constants import TEST_JWT_SECRET
 
@@ -56,6 +56,7 @@ def test_settings(postgres_container: PostgresContainer, db_name: str) -> Settin
         log=LogSettings(level="WARNING"),
         db=container_db_settings(postgres_container, db_name),
         scheduler=SchedulerSettings(webhook_jwt_ttl_minutes=5, webhook_timeout_seconds=30.0),
+        llm=LLMSettings(max_retries=2),
     )
 
 

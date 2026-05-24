@@ -21,12 +21,29 @@ services:
     env_file: .env
     environment:
       DB_HOST: db
+      LLM_API_BASE: http://ollama:11434
     ports:
       - "8000:8000"
     entrypoint: ["/app/scripts/docker-entrypoint.sh"]
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_started
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   postgres_data:
+  ollama_data:
