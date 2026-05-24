@@ -1,6 +1,7 @@
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from app.auth.context import CurrentUser
+from app.auth.security import require_bearer_token
 
 
 def get_current_user(request: Request) -> CurrentUser:
@@ -8,3 +9,9 @@ def get_current_user(request: Request) -> CurrentUser:
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return CurrentUser(user_id=user_id)
+
+
+protected_dependencies = [
+    Depends(require_bearer_token),
+    Depends(get_current_user),
+]

@@ -69,7 +69,6 @@ async def create_task(
 async def list_tasks(
     session: AsyncSession = Depends(get_db),
     active_only: bool = Query(default=True),
-    _user: CurrentUser = Depends(get_current_user),
 ) -> list[TaskResponse]:
     stmt = select(ScheduledTask).order_by(ScheduledTask.created_at.desc())
     if active_only:

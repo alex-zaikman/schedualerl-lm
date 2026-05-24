@@ -1,7 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.auth.context import CurrentUser
-from app.auth.dependencies import get_current_user
 from app.config.dependencies import get_app_settings
 from app.config.settings import Settings
 from app.schemas.trigger_parse import TriggerParseRequest, TriggerParseResponse
@@ -13,7 +11,6 @@ router = APIRouter(tags=["triggers"])
 @router.post("/triggers/parse")
 async def parse_trigger(
     body: TriggerParseRequest,
-    _user: CurrentUser = Depends(get_current_user),
     settings: Settings = Depends(get_app_settings),
 ) -> TriggerParseResponse:
     try:
