@@ -102,21 +102,3 @@ uv run isort --check-only --diff app tests scripts alembic  # check import order
 uv run isort app tests scripts alembic                      # fix import order
 uv run pylint app tests scripts
 ```
-
-## Dependencies
-
-Runtime:
-
-- fastapi, uvicorn, pydantic, pydantic-settings
-- apscheduler (sqlalchemy + asyncpg extras)
-- sqlalchemy, asyncpg, alembic
-- httpx, litellm, PyJWT, tenacity, cron-validator
-
-Dev / test:
-
-- isort, pylint, pylint-pydantic
-- pytest, pytest-asyncio
-- testcontainers[postgres]
-- time-machine
-
-Versions are pinned in [pyproject.toml](pyproject.toml).
