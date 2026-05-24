@@ -5,13 +5,13 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.enums import TriggerType
 from app.db.models.scheduled_task import ScheduledTask
+from app.enums import TriggerType
 from app.schemas.tasks import (
-    CronTriggerSpec,
     CronTriggerConfig,
-    IntervalTriggerSpec,
+    CronTriggerSpec,
     IntervalTriggerConfig,
+    IntervalTriggerSpec,
     OnceTrigger,
     OnceTriggerConfig,
     StructuredTriggerSpec,
@@ -76,3 +76,7 @@ def compute_next_run_at(spec: StructuredTriggerSpec) -> datetime | None:
     if next_fire.tzinfo is None:
         return next_fire.replace(tzinfo=timezone.utc)
     return next_fire
+
+
+def compute_next_run_at_for_task(task: ScheduledTask) -> datetime | None:
+    return compute_next_run_at(_task_to_trigger_spec(task))

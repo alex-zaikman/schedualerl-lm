@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field, HttpUrl, RootModel, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from app.enums import TriggerType
 
@@ -61,6 +61,8 @@ class TaskCreate(BaseModel):
 
 class TaskListQuery(BaseModel):
     active_only: bool = True
+    limit: int = Field(default=50, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
 
 
 class OnceTriggerConfig(BaseModel):
@@ -94,5 +96,8 @@ class TaskResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TaskListResponse(RootModel[list[TaskResponse]]):
-    pass
+class TaskListResponse(BaseModel):
+    items: list[TaskResponse]
+    total: int
+    limit: int
+    offset: int

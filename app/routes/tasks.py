@@ -1,9 +1,10 @@
 import logging
-from uuid import uuid4
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 from apscheduler import AsyncScheduler
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.context import CurrentUser
@@ -12,15 +13,28 @@ from app.config.dependencies import get_app_settings
 from app.config.settings import Settings
 from app.db.dependencies import get_db
 from app.db.models.scheduled_task import ScheduledTask
+from app.enums import TriggerType
 from app.scheduler.dependencies import get_scheduler
-from app.scheduler.service import register_schedule
-from app.scheduler.triggers import compute_next_run_at, trigger_config_from_spec
+from app.scheduler.service import register_schedule, unregister_schedule
+from app.scheduler.triggers import (
+    compute_next_run_at,
+    compute_next_run_at_for_task,
+    trigger_config_from_spec,
+)
 from app.schemas.tasks import TaskCreate, TaskListQuery, TaskListResponse, TaskResponse
 from app.services.trigger_parse import TriggerParseError, resolve_trigger_spec
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tasks"])
+
+
+async def _get_task_or_404(session: AsyncSession, task_id: UUID) -> ScheduledTask:
+    result = await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
+    task = result.scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
 
 def _to_response(task: ScheduledTask) -> TaskResponse:
@@ -80,9 +94,67 @@ async def list_tasks(
     query: TaskListQuery = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> TaskListResponse:
-    stmt = select(ScheduledTask).order_by(ScheduledTask.created_at.desc())
+    filters = []
     if query.active_only:
-        stmt = stmt.where(ScheduledTask.is_active.is_(True))
+        filters.append(ScheduledTask.is_active.is_(True))
+
+    count_stmt = select(func.count()).select_from(ScheduledTask)
+    for condition in filters:
+        count_stmt = count_stmt.where(condition)
+    total = await session.scalar(count_stmt) or 0
+
+    stmt = select(ScheduledTask).order_by(ScheduledTask.created_at.desc())
+    for condition in filters:
+        stmt = stmt.where(condition)
+    stmt = stmt.limit(query.limit).offset(query.offset)
     result = await session.execute(stmt)
     tasks = result.scalars().all()
-    return TaskListResponse([_to_response(task) for task in tasks])
+    return TaskListResponse(
+        items=[_to_response(task) for task in tasks],
+        total=total,
+        limit=query.limit,
+        offset=query.offset,
+    )
+
+
+@router.post("/tasks/{task_id}/deactivate", response_model=TaskResponse)
+async def deactivate_task(
+    task_id: UUID,
+    background_tasks: BackgroundTasks,
+    scheduler: AsyncScheduler = Depends(get_scheduler),
+    session: AsyncSession = Depends(get_db),
+) -> TaskResponse:
+    task = await _get_task_or_404(session, task_id)
+
+    if task.is_active:
+        task.is_active = False
+        task.next_run_at = None
+        background_tasks.add_task(unregister_schedule, scheduler, task_id)
+
+    return _to_response(task)
+
+
+@router.post("/tasks/{task_id}/activate", response_model=TaskResponse)
+async def activate_task(
+    task_id: UUID,
+    background_tasks: BackgroundTasks,
+    scheduler: AsyncScheduler = Depends(get_scheduler),
+    session: AsyncSession = Depends(get_db),
+) -> TaskResponse:
+    task = await _get_task_or_404(session, task_id)
+
+    if task.is_active:
+        return _to_response(task)
+
+    next_run_at = compute_next_run_at_for_task(task)
+    if next_run_at is None or (
+        task.trigger_type == TriggerType.ONCE
+        and next_run_at <= datetime.now(timezone.utc)
+    ):
+        raise HTTPException(status_code=422, detail="Task cannot be activated")
+
+    task.is_active = True
+    task.next_run_at = next_run_at
+    background_tasks.add_task(register_schedule, scheduler, task)
+
+    return _to_response(task)

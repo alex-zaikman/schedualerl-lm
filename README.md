@@ -7,6 +7,9 @@ Endpoints:
 - `GET /health`
 - `GET /api/v1/me`
 - `POST /api/v1/tasks` — create a scheduled task
+- `GET /api/v1/tasks` — list tasks (`active_only`, `limit`, `offset`)
+- `POST /api/v1/tasks/{task_id}/activate` — resume a deactivated task
+- `POST /api/v1/tasks/{task_id}/deactivate` — pause a task
 - `POST /api/v1/triggers/parse` — parse natural-language schedule text
 
 ## Webhooks
@@ -14,6 +17,10 @@ Endpoints:
 Creating a task stores a `webhook_url`, optional `parameters` (query string), and a trigger. At fire time the executor sends an HTTP GET to that URL with `parameters` as query params. There is no request body. Non-2xx responses fail the run. Timeout is `SCHEDULER_WEBHOOK_TIMEOUT_SECONDS` (default 30).
 
 `once` tasks deactivate and are removed from the scheduler after they fire. `cron` and `interval` tasks keep running until deactivated.
+
+Use `POST /api/v1/tasks/{task_id}/deactivate` to pause a task and `POST /api/v1/tasks/{task_id}/activate` to resume it. Activation recomputes `next_run_at` from the stored trigger; expired `once` tasks (past `run_at`) return 422.
+
+`GET /api/v1/tasks` returns paginated results: `{ "items": [...], "total": N, "limit": 50, "offset": 0 }`. Query params: `active_only` (default `true`), `limit` (1–100, default 50), `offset` (default 0).
 
 ## Auth
 
@@ -87,10 +94,12 @@ Config: `asyncio_mode = auto`, test path `tests/` (see [pyproject.toml](pyprojec
 
 ## Linting
 
+Config: isort and pylint in [pyproject.toml](pyproject.toml).
+
 ```bash
 uv sync
-uv run isort --check-only --diff app tests scripts alembic
-uv run isort app tests scripts alembic
+uv run isort --check-only --diff app tests scripts alembic  # check import order
+uv run isort app tests scripts alembic                      # fix import order
 uv run pylint app tests scripts
 ```
 

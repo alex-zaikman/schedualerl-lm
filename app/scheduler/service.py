@@ -8,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.config.settings import DatabaseSettings, Settings
 from app.db.models.scheduled_task import ScheduledTask
-from app.scheduler.executor import WEBHOOK_EXECUTOR_TASK_ID, execute_scheduled_task, init_executor
+from app.scheduler.executor import (
+    WEBHOOK_EXECUTOR_TASK_ID,
+    execute_scheduled_task,
+    init_executor,
+)
 from app.scheduler.triggers import build_trigger_from_task
 
 logger = logging.getLogger(__name__)
@@ -53,6 +57,14 @@ async def register_schedule(scheduler: AsyncScheduler, task: ScheduledTask) -> N
         )
     except Exception:
         logger.exception("Failed to register schedule for task %s", task.id)
+        raise
+
+
+async def unregister_schedule(scheduler: AsyncScheduler, task_id: UUID) -> None:
+    try:
+        await scheduler.remove_schedule(str(task_id))
+    except Exception:
+        logger.exception("Failed to unregister schedule for task %s", task_id)
         raise
 
 
