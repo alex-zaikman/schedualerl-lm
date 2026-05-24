@@ -1,0 +1,58 @@
+---
+description: Use tenacity @retry decorator instead of manual retry loops
+alwaysApply: true
+---
+
+# Retry with Tenacity
+
+Use the tenacity `@retry` decorator. Do not use manual loops, `Retrying`, or `AsyncRetrying`.
+
+```python
+# ❌ BAD — manual loop
+for attempt in range(attempts):
+    try:
+        return do_work()
+    except TransientError:
+        ...
+
+# ❌ BAD — imperative tenacity API
+retrying = Retrying(...)
+for attempt in retrying:
+    with attempt:
+        return do_work()
+
+# ✅ GOOD — sync with stateful retries (see app/services/trigger_parse.py)
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
+
+def _before_sleep(retry_state) -> None:
+    messages.append({"role": "user", "content": f"Fix: {retry_state.outcome.exception()}"})
+
+@retry(
+    stop=stop_after_attempt(attempts),
+    retry=retry_if_exception_type(TriggerParseError),
+    before_sleep=_before_sleep,
+    after=_log_failed_attempt,
+    reraise=True,
+)
+def _parse_once() -> Result:
+    return do_work(messages)
+
+return _parse_once()
+
+# ✅ GOOD — async (see app/db/engine.py)
+from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
+@retry(
+    stop=stop_after_attempt(settings.connect_retries),
+    wait=wait_fixed(settings.connect_retry_delay),
+    retry=retry_if_exception_type(OSError),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    retry_error_callback=_raise_connection_error,
+)
+async def async_creator() -> Connection:
+    return await connect()
+```
+
+Use `before_sleep`, `after`, and `retry_error_callback` for logging, mutating arguments, or custom final errors — not try/except around a retry loop.
+
+When retry settings are dynamic, define callbacks and the decorated function inside the caller (closure), then invoke it once.
