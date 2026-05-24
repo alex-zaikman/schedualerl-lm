@@ -1,20 +1,22 @@
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+from datetime import timedelta
 
 import httpx
 import jwt
+import time_machine
 from sqlalchemy import select
 
 from app.auth.jwt import decode_token, encode_token
 from app.db.models.scheduled_task import ScheduledTask
 from app.db.rls import set_scheduler_rls
+from tests.constants import FROZEN_TIME, TEST_USER_ID
 
 
-def test_create_and_list_tasks(client, auth_headers):
-    run_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+@time_machine.travel(FROZEN_TIME, tick=False)
+def test_create_and_list_tasks(client, auth_headers_frozen):
+    run_at = (FROZEN_TIME + timedelta(hours=1)).isoformat()
     response = client.post(
         "/api/v1/tasks",
-        headers=auth_headers,
+        headers=auth_headers_frozen,
         json={
             "webhook_url": "https://example.com/hook",
             "parameters": {"foo": "bar"},
@@ -23,25 +25,26 @@ def test_create_and_list_tasks(client, auth_headers):
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["user_id"] == "test-user-123"
+    assert body["user_id"] == TEST_USER_ID
     assert body["webhook_url"] == "https://example.com/hook"
     assert body["parameters"] == {"foo": "bar"}
     assert body["trigger_type"] == "once"
     assert body["is_active"] is True
     assert body["id"]
 
-    list_response = client.get("/api/v1/tasks", headers=auth_headers)
+    list_response = client.get("/api/v1/tasks", headers=auth_headers_frozen)
     assert list_response.status_code == 200
     tasks = list_response.json()
     assert len(tasks) == 1
     assert tasks[0]["id"] == body["id"]
 
 
-def test_tasks_cross_user_isolation(client, auth_headers, test_settings):
-    run_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+@time_machine.travel(FROZEN_TIME, tick=False)
+def test_tasks_cross_user_isolation(client, auth_headers_frozen, test_settings):
+    run_at = (FROZEN_TIME + timedelta(hours=1)).isoformat()
     create_response = client.post(
         "/api/v1/tasks",
-        headers=auth_headers,
+        headers=auth_headers_frozen,
         json={
             "webhook_url": "https://example.com/hook",
             "parameters": {},
@@ -53,7 +56,7 @@ def test_tasks_cross_user_isolation(client, auth_headers, test_settings):
     other_token = jwt.encode(
         {
             "sub": "other-user-456",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+            "exp": FROZEN_TIME + timedelta(hours=1),
         },
         test_settings.auth.jwt_secret.get_secret_value(),
         algorithm=test_settings.auth.jwt_algorithm,
@@ -78,7 +81,10 @@ def test_jwt_encode_decode_round_trip(test_settings):
     assert payload["purpose"] == "webhook"
 
 
+@time_machine.travel(FROZEN_TIME, tick=False)
 def test_executor_calls_webhook(client, run_in_app_loop, test_settings):
+    from uuid import uuid4
+
     from app.scheduler.executor import execute_scheduled_task, init_executor
 
     captured: dict = {}
@@ -100,12 +106,12 @@ def test_executor_calls_webhook(client, run_in_app_loop, test_settings):
                 await set_scheduler_rls(session)
                 task = ScheduledTask(
                     id=uuid4(),
-                    user_id="test-user-123",
+                    user_id=TEST_USER_ID,
                     webhook_url="https://example.com/webhook",
                     parameters={"q": "1"},
                     trigger_type="once",
                     trigger_config={
-                        "run_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+                        "run_at": (FROZEN_TIME + timedelta(hours=1)).isoformat()
                     },
                     is_active=True,
                 )
@@ -132,5 +138,5 @@ def test_executor_calls_webhook(client, run_in_app_loop, test_settings):
     assert captured["authorization"].startswith("Bearer ")
 
     payload = decode_token(captured["authorization"].removeprefix("Bearer "), test_settings.auth)
-    assert payload["sub"] == "test-user-123"
+    assert payload["sub"] == TEST_USER_ID
     assert payload["purpose"] == "webhook"
