@@ -1,6 +1,6 @@
 [project]
 name = "schedulerlm"
-version = "0.1.0"
+version = "0.1.1"
 description = "Schedule webhooks with cron, intervals, or plain English — powered by LiteLLM."
 readme = "README.md"
 license = { text = "MIT-0" }
