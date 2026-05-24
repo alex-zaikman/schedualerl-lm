@@ -66,18 +66,3 @@ async def unregister_schedule(scheduler: AsyncScheduler, task_id: UUID) -> None:
     except Exception:
         logger.exception("Failed to unregister schedule for task %s", task_id)
         raise
-
-
-async def register_schedule_by_id(scheduler: AsyncScheduler, session_factory, task_id: UUID) -> None:
-    from sqlalchemy import select
-
-    from app.db.rls import set_scheduler_rls
-
-    async with session_factory() as session:
-        await set_scheduler_rls(session)
-        result = await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
-        task = result.scalar_one_or_none()
-    if task is None:
-        logger.warning("Cannot register schedule: task %s not found", task_id)
-        return
-    await register_schedule(scheduler, task)

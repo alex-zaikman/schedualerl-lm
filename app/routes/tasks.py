@@ -223,15 +223,10 @@ async def get_task_schedule(
 )
 async def run_task(
     task_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> TaskRunResponse:
     task = await _get_task_or_404(session, task_id)
-    user_id = session.info.get("current_user_id")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing user context",
-        )
 
     outcome = await run_task_manually(str(task.id))
     fire_result = webhook_fire_result(
@@ -241,7 +236,7 @@ async def run_task(
     )
     await record_execution(
         session,
-        user_id=user_id,
+        user_id=user.user_id,
         task_id=task.id,
         execution_source=fire_result.execution_source,
         webhook_url=fire_result.webhook_url,
@@ -283,6 +278,7 @@ async def run_task(
 async def deactivate_task(
     task_id: UUID,
     background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user),
     scheduler: AsyncScheduler = Depends(get_scheduler),
     session: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
@@ -291,14 +287,12 @@ async def deactivate_task(
     if task.is_active:
         task.is_active = False
         task.next_run_at = None
-        user_id = session.info.get("current_user_id")
-        if user_id is not None:
-            await record_task_lifecycle(
-                session,
-                user_id=user_id,
-                task_id=task.id,
-                event_type=TaskHistoryEventType.TASK_DEACTIVATED,
-            )
+        await record_task_lifecycle(
+            session,
+            user_id=user.user_id,
+            task_id=task.id,
+            event_type=TaskHistoryEventType.TASK_DEACTIVATED,
+        )
         background_tasks.add_task(unregister_schedule, scheduler, task_id)
 
     return _to_response(task)
@@ -317,6 +311,7 @@ async def deactivate_task(
 async def activate_task(
     task_id: UUID,
     background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user),
     scheduler: AsyncScheduler = Depends(get_scheduler),
     session: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
@@ -337,14 +332,12 @@ async def activate_task(
 
     task.is_active = True
     task.next_run_at = next_run_at
-    user_id = session.info.get("current_user_id")
-    if user_id is not None:
-        await record_task_lifecycle(
-            session,
-            user_id=user_id,
-            task_id=task.id,
-            event_type=TaskHistoryEventType.TASK_ACTIVATED,
-        )
+    await record_task_lifecycle(
+        session,
+        user_id=user.user_id,
+        task_id=task.id,
+        event_type=TaskHistoryEventType.TASK_ACTIVATED,
+    )
     background_tasks.add_task(register_schedule, scheduler, task)
 
     return _to_response(task)
@@ -361,19 +354,14 @@ async def activate_task(
 async def delete_task(
     task_id: UUID,
     background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user),
     scheduler: AsyncScheduler = Depends(get_scheduler),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     task = await _get_task_or_404(session, task_id)
-    user_id = session.info.get("current_user_id")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing user context",
-        )
 
     if task.is_active:
         background_tasks.add_task(unregister_schedule, scheduler, task_id)
 
-    await record_task_deleted(session, user_id=user_id, task=task)
+    await record_task_deleted(session, user_id=user.user_id, task=task)
     await session.delete(task)
