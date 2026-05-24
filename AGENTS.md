@@ -86,7 +86,9 @@ Use the OpenAPI schema as the source of truth for request/response shapes.
 | `GET` | `/health` | Health check (no auth) |
 | `GET` | `/api/v1/me` | Verify auth; get user id |
 | `POST` | `/api/v1/tasks` | Create a scheduled task |
-| `GET` | `/api/v1/tasks` | List tasks |
+| `GET` | `/api/v1/tasks` | List tasks (filter, sort, paginate) |
+| `GET` | `/api/v1/tasks/{task_id}/schedule` | Preview upcoming fire times |
+| `POST` | `/api/v1/tasks/{task_id}/run` | Fire webhook immediately (test/debug) |
 | `POST` | `/api/v1/tasks/{task_id}/activate` | Resume a paused task |
 | `POST` | `/api/v1/tasks/{task_id}/deactivate` | Pause a task |
 | `POST` | `/api/v1/triggers/parse` | Parse natural-language schedule text |
@@ -145,6 +147,8 @@ curl -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8000/api/v1/tasks?active_only=true&limit=50&offset=0"
 ```
 
+Optional query params: `trigger_type` (`once`, `cron`, `interval`), `sort` (`created_at`, `next_run_at`, `updated_at`), `order` (`asc`, `desc`).
+
 Response shape:
 
 ```json
@@ -153,6 +157,34 @@ Response shape:
   "total": 1,
   "limit": 50,
   "offset": 0
+}
+```
+
+#### Preview upcoming fire times for an existing task
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/tasks/{task_id}/schedule?count=5"
+```
+
+Returns `trigger_type`, `is_active`, `next_run_at`, and `upcoming` (list of datetimes). Works for active and paused tasks.
+
+#### Run a task webhook immediately
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/tasks/{task_id}/run"
+```
+
+Fires the webhook now for testing. Works on paused tasks. Does not deactivate `once` tasks or change `next_run_at`. Returns `502` if the webhook returns a non-2xx status.
+
+Response shape:
+
+```json
+{
+  "task_id": "...",
+  "http_status": 200
 }
 ```
 
@@ -190,6 +222,7 @@ Webhook JWT claims: `sub` (user id), `task_id`, `purpose: "webhook"`, `exp`.
 | `401` | Missing or invalid Bearer token |
 | `404` | Task not found (or not owned by the user) |
 | `422` | Validation or trigger parse failure; see `detail` in the response body |
+| `502` | Manual run webhook failure (non-2xx or connection error) |
 
 ### Task create request shape
 

@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
-from app.enums import TriggerType
+from app.enums import SortOrder, TaskSortField, TriggerType
 
 
 class OnceTrigger(BaseModel):
@@ -134,6 +134,18 @@ class TaskListQuery(BaseModel):
         default=True,
         description="When true, return only tasks that are currently scheduled.",
     )
+    trigger_type: TriggerType | None = Field(
+        default=None,
+        description="When set, return only tasks with this trigger type.",
+    )
+    sort: TaskSortField = Field(
+        default=TaskSortField.CREATED_AT,
+        description="Field to sort results by.",
+    )
+    order: SortOrder = Field(
+        default=SortOrder.DESC,
+        description="Sort direction.",
+    )
     limit: int = Field(default=50, ge=1, le=100, description="Page size (1–100).")
     offset: int = Field(default=0, ge=0, description="Number of items to skip.")
 
@@ -187,3 +199,28 @@ class TaskListResponse(BaseModel):
     total: int = Field(description="Total tasks matching the query (across all pages).")
     limit: int = Field(description="Page size used for this response.")
     offset: int = Field(description="Number of items skipped before this page.")
+
+
+class TaskRunResponse(BaseModel):
+    task_id: str = Field(description="Task UUID.")
+    http_status: int = Field(description="HTTP status code returned by the webhook.")
+
+
+class TaskScheduleQuery(BaseModel):
+    count: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Number of upcoming fire times to return (1–20).",
+    )
+
+
+class TaskScheduleResponse(BaseModel):
+    trigger_type: TriggerType = Field(description="Stored trigger kind for the task.")
+    is_active: bool = Field(description="Whether the task is currently scheduled.")
+    next_run_at: datetime | None = Field(
+        description="First upcoming fire time from now, or null if none remain.",
+    )
+    upcoming: list[datetime] = Field(
+        description="Up to `count` future fire times computed from the stored trigger.",
+    )

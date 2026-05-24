@@ -87,6 +87,20 @@ def test_trigger_parse_llm_output_rejects_cron_with_interval_fields():
         )
 
 
+def test_trigger_parse_llm_output_rejects_cron_with_once_datetime():
+    with pytest.raises(ValueError, match="only cron_expr should be set"):
+        TriggerParseLLMOutput.model_validate(
+            {
+                "_thought": "Daily 11pm with spurious once_datetime.",
+                "type": "cron",
+                "cron_expr": "0 23 * * *",
+                "interval_value": None,
+                "interval_unit": None,
+                "once_datetime": "2026-05-24T23:00:00+00:00",
+            }
+        )
+
+
 def test_trigger_parse_llm_output_requires_interval_unit_pair():
     with pytest.raises(
         ValueError,

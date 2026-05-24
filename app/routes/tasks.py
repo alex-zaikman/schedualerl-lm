@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+import httpx
 from apscheduler import AsyncScheduler
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -13,15 +14,25 @@ from app.config.dependencies import get_app_settings
 from app.config.settings import Settings
 from app.db.dependencies import get_db
 from app.db.models.scheduled_task import ScheduledTask
-from app.enums import TriggerType
+from app.enums import SortOrder, TaskSortField, TriggerType
 from app.scheduler.dependencies import get_scheduler
+from app.scheduler.executor import run_task_manually
 from app.scheduler.service import register_schedule, unregister_schedule
 from app.scheduler.triggers import (
     compute_next_run_at,
     compute_next_run_at_for_task,
+    compute_upcoming_run_times,
     trigger_config_from_spec,
 )
-from app.schemas.tasks import TaskCreate, TaskListQuery, TaskListResponse, TaskResponse
+from app.schemas.tasks import (
+    TaskCreate,
+    TaskListQuery,
+    TaskListResponse,
+    TaskResponse,
+    TaskRunResponse,
+    TaskScheduleQuery,
+    TaskScheduleResponse,
+)
 from app.services.trigger_parse import TriggerParseError, resolve_trigger_spec
 
 logger = logging.getLogger(__name__)
@@ -55,6 +66,19 @@ def _to_response(task: ScheduledTask) -> TaskResponse:
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
+
+
+def _list_order_by(query: TaskListQuery):
+    sort_columns = {
+        TaskSortField.CREATED_AT: ScheduledTask.created_at,
+        TaskSortField.NEXT_RUN_AT: ScheduledTask.next_run_at,
+        TaskSortField.UPDATED_AT: ScheduledTask.updated_at,
+    }
+    column = sort_columns[query.sort]
+    ordering = column.asc() if query.order == SortOrder.ASC else column.desc()
+    if query.sort == TaskSortField.NEXT_RUN_AT:
+        ordering = ordering.nulls_last()
+    return ordering
 
 
 @router.post(
@@ -116,7 +140,8 @@ async def create_task(
     description=(
         "Returns paginated tasks owned by the authenticated user. "
         "By default only active tasks are returned (`active_only=true`). "
-        "Use `limit` and `offset` for pagination."
+        "Filter by `trigger_type`, sort with `sort` and `order`, "
+        "and use `limit` and `offset` for pagination."
     ),
 )
 async def list_tasks(
@@ -126,13 +151,15 @@ async def list_tasks(
     filters = []
     if query.active_only:
         filters.append(ScheduledTask.is_active.is_(True))
+    if query.trigger_type is not None:
+        filters.append(ScheduledTask.trigger_type == query.trigger_type)
 
     count_stmt = select(func.count(ScheduledTask.id))  # pylint: disable=not-callable
     for condition in filters:
         count_stmt = count_stmt.where(condition)
     total = await session.scalar(count_stmt) or 0
 
-    stmt = select(ScheduledTask).order_by(ScheduledTask.created_at.desc())
+    stmt = select(ScheduledTask).order_by(_list_order_by(query))
     for condition in filters:
         stmt = stmt.where(condition)
     stmt = stmt.limit(query.limit).offset(query.offset)
@@ -144,6 +171,60 @@ async def list_tasks(
         limit=query.limit,
         offset=query.offset,
     )
+
+
+@router.get(
+    "/tasks/{task_id}/schedule",
+    response_model=TaskScheduleResponse,
+    summary="Preview upcoming fire times",
+    description=(
+        "Returns up to `count` future fire times computed from the task's "
+        "stored trigger. Works for active and paused tasks; does not mutate the task."
+    ),
+)
+async def get_task_schedule(
+    task_id: UUID,
+    query: TaskScheduleQuery = Depends(),
+    session: AsyncSession = Depends(get_db),
+) -> TaskScheduleResponse:
+    task = await _get_task_or_404(session, task_id)
+    upcoming = compute_upcoming_run_times(task, count=query.count)
+    return TaskScheduleResponse(
+        trigger_type=task.trigger_type,
+        is_active=task.is_active,
+        next_run_at=upcoming[0] if upcoming else None,
+        upcoming=upcoming,
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/run",
+    response_model=TaskRunResponse,
+    summary="Run a task webhook immediately",
+    description=(
+        "Fires the task webhook now for testing or debugging. "
+        "Works on paused tasks. Does not deactivate `once` tasks or "
+        "change `next_run_at`; the scheduled run still occurs at `run_at`."
+    ),
+)
+async def run_task(
+    task_id: UUID,
+    session: AsyncSession = Depends(get_db),
+) -> TaskRunResponse:
+    task = await _get_task_or_404(session, task_id)
+    try:
+        http_status = await run_task_manually(str(task.id))
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Webhook returned {exc.response.status_code}",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Webhook request failed: {exc}",
+        ) from exc
+    return TaskRunResponse(task_id=str(task.id), http_status=http_status)
 
 
 @router.post(

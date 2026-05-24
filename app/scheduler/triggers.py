@@ -80,3 +80,23 @@ def compute_next_run_at(spec: StructuredTriggerSpec) -> datetime | None:
 
 def compute_next_run_at_for_task(task: ScheduledTask) -> datetime | None:
     return compute_next_run_at(_task_to_trigger_spec(task))
+
+
+def compute_upcoming_run_times(task: ScheduledTask, *, count: int) -> list[datetime]:
+    trigger = build_trigger_from_task(task)
+    now = datetime.now(timezone.utc)
+    times: list[datetime] = []
+    for _ in range(count):
+        nxt = trigger.next()
+        if nxt is None:
+            break
+        if nxt.tzinfo is None:
+            nxt = nxt.replace(tzinfo=timezone.utc)
+        else:
+            nxt = nxt.astimezone(timezone.utc)
+        if nxt < now:
+            if task.trigger_type == TriggerType.ONCE:
+                break
+            continue
+        times.append(nxt)
+    return times

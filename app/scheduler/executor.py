@@ -37,9 +37,33 @@ def init_executor(
     _scheduler = scheduler
 
 
+def _require_executor() -> tuple[Settings, httpx.AsyncClient]:
+    if _settings is None or _http_client is None:
+        raise RuntimeError("Scheduler executor not initialized")
+    return _settings, _http_client
+
+
+async def fire_task_webhook(task: ScheduledTask) -> int:
+    """Send the webhook GET for a task and return the HTTP status code."""
+    settings, http_client = _require_executor()
+    token = encode_token(
+        settings.auth,
+        sub=task.user_id,
+        expires_in=timedelta(minutes=settings.scheduler.webhook_jwt_ttl_minutes),
+        extra_claims={"task_id": str(task.id), "purpose": "webhook"},
+    )
+    response = await http_client.get(
+        task.webhook_url,
+        params=task.parameters,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    response.raise_for_status()
+    return response.status_code
+
+
 async def execute_scheduled_task(task_id: str) -> None:
     """Run a scheduled webhook GET with a short-lived JWT for the owning user."""
-    if _session_factory is None or _settings is None or _http_client is None:
+    if _session_factory is None:
         raise RuntimeError("Scheduler executor not initialized")
 
     async with _session_factory() as session:
@@ -52,18 +76,7 @@ async def execute_scheduled_task(task_id: str) -> None:
             logger.info("Scheduled task %s is inactive, skipping", task_id)
             return
 
-        token = encode_token(
-            _settings.auth,
-            sub=task.user_id,
-            expires_in=timedelta(minutes=_settings.scheduler.webhook_jwt_ttl_minutes),
-            extra_claims={"task_id": str(task.id), "purpose": "webhook"},
-        )
-        response = await _http_client.get(
-            task.webhook_url,
-            params=task.parameters,
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        response.raise_for_status()
+        await fire_task_webhook(task)
 
         if task.trigger_type == TriggerType.ONCE:
             task.is_active = False
@@ -72,6 +85,19 @@ async def execute_scheduled_task(task_id: str) -> None:
 
     if task.trigger_type == TriggerType.ONCE and _scheduler is not None:
         await _scheduler.remove_schedule(str(task.id))
+
+
+async def run_task_manually(task_id: str) -> int:
+    """Fire a task webhook immediately without changing task state."""
+    if _session_factory is None:
+        raise RuntimeError("Scheduler executor not initialized")
+
+    async with _session_factory() as session:
+        await set_scheduler_rls(session)
+        task = await _load_task(session, task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
+        return await fire_task_webhook(task)
 
 
 async def _load_task(session: AsyncSession, task_id: str) -> ScheduledTask | None:

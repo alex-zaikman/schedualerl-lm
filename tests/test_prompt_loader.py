@@ -6,6 +6,7 @@ import pytest
 from app.prompts.loader import (
     CURRENT_DATE_PLACEHOLDER,
     CURRENT_ISO_DATETIME_PLACEHOLDER,
+    DEFAULT_TRIGGER_PARSE_PROMPT_PATH,
     DEFAULT_TIMEZONE_PLACEHOLDER,
     NEXT_FRIDAY_5PM_ISO_PLACEHOLDER,
     ONE_HOUR_LATER_ISO_PLACEHOLDER,
@@ -77,3 +78,15 @@ def test_render_trigger_parse_prompt_raises_on_unreplaced_placeholders():
 
     with pytest.raises(PromptLoadError, match="Unreplaced placeholders"):
         render_trigger_parse_prompt(content, now=now, timezone="UTC")
+
+
+def test_trigger_parse_prompt_includes_field_exclusivity_guidance():
+    now = datetime(2026, 5, 24, 8, 0, tzinfo=timezone.utc)
+    content = load_prompt(DEFAULT_TRIGGER_PARSE_PROMPT_PATH)
+
+    assert "FIELD EXCLUSIVITY" in content
+    assert "every day at 11pm UTC" in content
+    assert "WRONG for" in content
+
+    rendered = render_trigger_parse_prompt(content, now=now, timezone="UTC")
+    assert "[INJECT_" not in rendered

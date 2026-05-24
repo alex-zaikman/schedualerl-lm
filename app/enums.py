@@ -7,6 +7,17 @@ class TriggerType(StrEnum):
     INTERVAL = "interval"
 
 
+class TaskSortField(StrEnum):
+    CREATED_AT = "created_at"
+    NEXT_RUN_AT = "next_run_at"
+    UPDATED_AT = "updated_at"
+
+
+class SortOrder(StrEnum):
+    ASC = "asc"
+    DESC = "desc"
+
+
 class HealthStatus(StrEnum):
     OK = "ok"
     UNAVAILABLE = "unavailable"

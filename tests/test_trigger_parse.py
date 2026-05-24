@@ -140,6 +140,35 @@ def test_parse_trigger_retries_on_invalid_cron(
 
 @time_machine.travel(FROZEN_TIME, tick=False)
 @patch("app.services.trigger_parse.completion")
+def test_parse_trigger_retries_on_cron_with_once_datetime(
+    mock_completion, client, auth_headers_frozen
+):
+    run_at = FROZEN_TIME.replace(hour=23, minute=0).isoformat()
+    mock_completion.side_effect = [
+        _mock_llm_response(
+            _llm_output(
+                cron_expr="0 23 * * *",
+                once_datetime=run_at,
+            )
+        ),
+        _mock_llm_response(_llm_output(cron_expr="0 23 * * *")),
+    ]
+
+    response = client.post(
+        "/api/v1/triggers/parse",
+        headers=auth_headers_frozen,
+        json={"text": "every day at 11pm UTC"},
+    )
+
+    assert response.status_code == 200
+    assert mock_completion.call_count == 2
+    body = response.json()
+    assert body["trigger_type"] == "cron"
+    assert body["trigger_config"] == {"expression": "0 23 * * *", "timezone": "UTC"}
+
+
+@time_machine.travel(FROZEN_TIME, tick=False)
+@patch("app.services.trigger_parse.completion")
 def test_parse_trigger_exhausted_retries_returns_422(
     mock_completion, client, auth_headers_frozen
 ):

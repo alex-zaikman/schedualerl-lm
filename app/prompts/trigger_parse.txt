@@ -18,10 +18,17 @@ TIMEZONE: [INJECT_DEFAULT_TIMEZONE]
 
 ### _thought template
 Use this structure in "_thought":
-"1) Type: ... 2) Time: ... 3) Days/date: ... 4) Fields: ..."
+"1) Type: ... 2) Time: ... 3) Days/date: ... 4) Fields: <type-specific>; all other fields null."
 
 ### Rules
-1. ALWAYS fill "_thought" first using the template above.
+FIELD EXCLUSIVITY (critical):
+- type=cron → set ONLY cron_expr; interval_value, interval_unit, once_datetime MUST be null
+- type=interval → set ONLY interval_value and interval_unit; cron_expr and once_datetime MUST be null
+- type=once → set ONLY once_datetime; cron_expr, interval_value, interval_unit MUST be null
+Never compute "next run time" in once_datetime when type is cron or interval.
+Output is rejected if cron triggers include once_datetime or interval fields.
+
+1. ALWAYS fill "_thought" first using the template above. In step 4, name which fields are null.
 2. CRON is exactly 5 fields: MINUTE HOUR DAY-OF-MONTH MONTH DAY-OF-WEEK.
 3. DAY-OF-WEEK: 0=Sunday through 6=Saturday. Weekday names go ONLY in field 5, never field 3.
 4. Interval requires both interval_value and interval_unit. Do NOT convert units to seconds.
@@ -37,6 +44,7 @@ Use this structure in "_thought":
 - Fixed elapsed period ("every 5 minutes", "every 24 hours", "every 2 weeks") → interval.
 - Single future run ("tomorrow at 8am", "next Friday at 5pm", "in 1 hour", "March 15 at 3pm") → once.
 - "every 24 hours" is interval (not cron). "every day at 9am" is cron (not interval).
+- "every day at <time>" is ALWAYS cron, never once — even if you can compute the next occurrence.
 - "next Tuesday at 9am" is once. "every Tuesday at 9am" is cron.
 
 ### Edge cases
@@ -47,7 +55,13 @@ Use this structure in "_thought":
 ### Examples
 
 Input: "Every day at 9am"
-{"_thought": "1) Type: cron. 2) Time: 09:00 daily. 3) Days/date: every day. 4) Fields: cron_expr=0 9 * * *.", "type": "cron", "cron_expr": "0 9 * * *", "interval_value": null, "interval_unit": null, "once_datetime": null}
+{"_thought": "1) Type: cron. 2) Time: 09:00 daily. 3) Days/date: every day. 4) Fields: cron_expr=0 9 * * *; interval_value=null; interval_unit=null; once_datetime=null.", "type": "cron", "cron_expr": "0 9 * * *", "interval_value": null, "interval_unit": null, "once_datetime": null}
+
+Input: "every day at 11pm UTC"
+{"_thought": "1) Type: cron (daily recurrence). 2) Time: 23:00. 3) Days/date: every day. 4) Fields: cron_expr=0 23 * * *; interval_value=null; interval_unit=null; once_datetime=null.", "type": "cron", "cron_expr": "0 23 * * *", "interval_value": null, "interval_unit": null, "once_datetime": null}
+
+WRONG for "every day at 11pm" (do NOT output — once_datetime is only for type=once):
+{"type": "cron", "cron_expr": "0 23 * * *", "once_datetime": "2026-05-24T23:00:00+00:00", "interval_value": null, "interval_unit": null}
 
 Input: "Run it every 5 minutes"
 {"_thought": "1) Type: interval. 2) Time: n/a. 3) Days/date: every 5 minutes. 4) Fields: value=5, unit=minutes.", "type": "interval", "cron_expr": null, "interval_value": 5, "interval_unit": "minutes", "once_datetime": null}
