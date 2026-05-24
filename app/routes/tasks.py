@@ -35,7 +35,10 @@ async def _get_task_or_404(session: AsyncSession, task_id: UUID) -> ScheduledTas
     )
     task = result.scalar_one_or_none()
     if task is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
     return task
 
 
@@ -61,9 +64,11 @@ def _to_response(task: ScheduledTask) -> TaskResponse:
     summary="Create a scheduled task",
     description=(
         "Creates a task that fires an HTTP GET to `webhook_url` on the given schedule. "
-        "Prefer `trigger.type: \"text\"` for natural language (e.g. 'every day at 9am'); "
+        "Prefer `trigger.type: \"text\"` for natural language "
+        "(e.g. 'every day at 9am'); "
         "use structured types (`once`, `cron`, `interval`) when the schedule is exact. "
-        "`once` tasks deactivate after firing; `cron` and `interval` tasks repeat until deactivated."
+        "`once` tasks deactivate after firing; `cron` and `interval` tasks "
+        "repeat until deactivated."
     ),
 )
 async def create_task(
@@ -171,7 +176,8 @@ async def deactivate_task(
     response_model=TaskResponse,
     summary="Resume a paused task",
     description=(
-        "Reactivates a deactivated task and recomputes `next_run_at` from the stored trigger. "
+        "Reactivates a deactivated task and recomputes `next_run_at` "
+        "from the stored trigger. "
         "Returns 422 if the task cannot be scheduled (e.g. an expired `once` task)."
     ),
 )

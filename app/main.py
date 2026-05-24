@@ -45,8 +45,10 @@ def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(
         title=settings.app.name,
         description=(
-            "Schedules webhook GET calls on once, cron, interval, or natural-language triggers. "
-            "At fire time the executor sends an HTTP GET to the task's webhook URL with optional "
+            "Schedules webhook GET calls on once, cron, interval, "
+            "or natural-language triggers. "
+            "At fire time the executor sends an HTTP GET to the task's "
+            "webhook URL with optional "
             "query parameters and a short-lived JWT.\n\n"
             "**Authentication:** All `/api/v1` routes require "
             "`Authorization: Bearer <JWT>`. The token's `sub` claim is the user id; "
