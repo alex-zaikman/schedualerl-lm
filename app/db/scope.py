@@ -1,9 +1,16 @@
 from sqlalchemy import String, event
-from sqlalchemy.orm import Mapped, ORMExecuteState, Session, declared_attr, mapped_column, with_loader_criteria
+from sqlalchemy.orm import (
+    Mapped,
+    ORMExecuteState,
+    Session,
+    declared_attr,
+    mapped_column,
+    with_loader_criteria,
+)
 
 
 class UserOwned:
-    """Mixin for models scoped to a user. Concrete models must inherit Base + UserOwned."""
+    """Mixin for models scoped to a user."""
 
     @declared_attr
     def user_id(cls) -> Mapped[str]:

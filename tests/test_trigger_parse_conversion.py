@@ -88,7 +88,10 @@ def test_trigger_parse_llm_output_rejects_cron_with_interval_fields():
 
 
 def test_trigger_parse_llm_output_requires_interval_unit_pair():
-    with pytest.raises(ValueError, match="interval_value and interval_unit are required"):
+    with pytest.raises(
+        ValueError,
+        match="interval_value and interval_unit are required",
+    ):
         TriggerParseLLMOutput.model_validate(
             {
                 "_thought": "Missing unit.",

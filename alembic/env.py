@@ -6,11 +6,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
 from app.config.settings import DatabaseSettings
 from app.db.base import Base
-from app.db.models.scheduled_task import ScheduledTask  # noqa: F401
 from app.db.migrations import get_db_settings_override
+from app.db.models.scheduled_task import ScheduledTask  # noqa: F401
 
 config = context.config
 

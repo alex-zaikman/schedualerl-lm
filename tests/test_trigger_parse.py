@@ -74,7 +74,9 @@ def test_parse_trigger_interval(mock_completion, client, auth_headers_frozen):
 
 @time_machine.travel(FROZEN_TIME, tick=False)
 @patch("app.services.trigger_parse.completion")
-def test_parse_trigger_once_uses_relative_parser_without_llm(mock_completion, client, auth_headers_frozen):
+def test_parse_trigger_once_uses_relative_parser_without_llm(
+    mock_completion, client, auth_headers_frozen
+):
     response = client.post(
         "/api/v1/triggers/parse",
         headers=auth_headers_frozen,
@@ -115,7 +117,9 @@ def test_parse_trigger_once(mock_completion, client, auth_headers_frozen):
 
 @time_machine.travel(FROZEN_TIME, tick=False)
 @patch("app.services.trigger_parse.completion")
-def test_parse_trigger_retries_on_invalid_cron(mock_completion, client, auth_headers_frozen):
+def test_parse_trigger_retries_on_invalid_cron(
+    mock_completion, client, auth_headers_frozen
+):
     mock_completion.side_effect = [
         _mock_llm_response(_llm_output(cron_expr="*/61 * * * *")),
         _mock_llm_response(_llm_output()),
@@ -136,8 +140,12 @@ def test_parse_trigger_retries_on_invalid_cron(mock_completion, client, auth_hea
 
 @time_machine.travel(FROZEN_TIME, tick=False)
 @patch("app.services.trigger_parse.completion")
-def test_parse_trigger_exhausted_retries_returns_422(mock_completion, client, auth_headers_frozen):
-    mock_completion.return_value = _mock_llm_response(_llm_output(cron_expr="*/61 * * * *"))
+def test_parse_trigger_exhausted_retries_returns_422(
+    mock_completion, client, auth_headers_frozen
+):
+    mock_completion.return_value = _mock_llm_response(
+        _llm_output(cron_expr="*/61 * * * *")
+    )
 
     response = client.post(
         "/api/v1/triggers/parse",

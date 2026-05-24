@@ -24,11 +24,48 @@ package = false
 
 [dependency-groups]
 dev = [
+    "isort>=6.0.0",
+    "pylint>=3.3.0",
+    "pylint-pydantic>=0.4.0",
     "pytest>=8.3.0",
     "pytest-asyncio>=0.25.0",
     "testcontainers[postgres]>=4.9.0",
     "time-machine>=3.2.0",
 ]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["app", "tests", "scripts", "alembic"]
+skip = [".venv", "alembic/versions"]
+
+[tool.pylint.main]
+py-version = "3.12"
+jobs = 0
+load-plugins = ["pylint_pydantic"]
+ignore-paths = ["alembic/versions", "alembic/env.py"]
+
+[tool.pylint.messages_control]
+disable = [
+    "broad-exception-caught",
+    "duplicate-code",
+    "fixme",
+    "import-outside-toplevel",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "missing-module-docstring",
+    "no-self-argument",
+    "redefined-outer-name",
+    "too-few-public-methods",
+    "unused-argument",
+]
+
+[tool.pylint.format]
+max-line-length = 88
+
+[tool.pylint.design]
+max-args = 10
+max-positional-arguments = 10
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

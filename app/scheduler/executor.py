@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.jwt import encode_token
 from app.config.settings import Settings
-from app.enums import TriggerType
 from app.db.models.scheduled_task import ScheduledTask
 from app.db.rls import set_scheduler_rls
 from app.db.session import SessionFactory
+from app.enums import TriggerType
 
 logger = logging.getLogger(__name__)
 

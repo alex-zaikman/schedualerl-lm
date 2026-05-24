@@ -136,7 +136,8 @@ def test_list_tasks_pagination(client, auth_headers_frozen):
     assert page_one_body["limit"] == 2
     assert page_one_body["offset"] == 0
     assert len(page_one_body["items"]) == 2
-    assert [item["id"] for item in page_one_body["items"]] == list(reversed(task_ids))[:2]
+    page_one_ids = [item["id"] for item in page_one_body["items"]]
+    assert page_one_ids == list(reversed(task_ids))[:2]
 
     page_two = client.get(
         "/api/v1/tasks?limit=2&offset=2",

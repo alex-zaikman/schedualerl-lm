@@ -3,13 +3,13 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Generator
 
+from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import create_async_engine
+
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import create_async_engine
-
 from app.config.settings import DatabaseSettings
 
 _db_settings_override: ContextVar[DatabaseSettings | None] = ContextVar(

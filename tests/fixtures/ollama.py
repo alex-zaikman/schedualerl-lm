@@ -40,7 +40,9 @@ def ollama_available():
             timeout=TEST_LLM_WARMUP_TIMEOUT_SECONDS,
         )
         if resp.status_code != 200:
-            raise RuntimeError(f"Ollama warmup returned {resp.status_code}: {resp.text[:200]}")
+            raise RuntimeError(
+                f"Ollama warmup returned {resp.status_code}: {resp.text[:200]}"
+            )
     except Exception as exc:
         warnings.warn(
             f"Ollama warmup failed ({exc}); skipping LLM integration tests",

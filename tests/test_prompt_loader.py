@@ -9,8 +9,8 @@ from app.prompts.loader import (
     DEFAULT_TIMEZONE_PLACEHOLDER,
     NEXT_FRIDAY_5PM_ISO_PLACEHOLDER,
     ONE_HOUR_LATER_ISO_PLACEHOLDER,
-    PromptLoadError,
     TOMORROW_MORNING_ISO_PLACEHOLDER,
+    PromptLoadError,
     build_trigger_parse_placeholders,
     load_prompt,
     render_trigger_parse_prompt,
@@ -57,7 +57,11 @@ def test_render_trigger_parse_prompt_replaces_placeholders():
         f"DEFAULT TIMEZONE: {DEFAULT_TIMEZONE_PLACEHOLDER}"
     )
 
-    rendered = render_trigger_parse_prompt(content, now=now, timezone="America/New_York")
+    rendered = render_trigger_parse_prompt(
+        content,
+        now=now,
+        timezone="America/New_York",
+    )
 
     assert "2026-05-24" in rendered
     assert "America/New_York" in rendered
@@ -66,7 +70,10 @@ def test_render_trigger_parse_prompt_replaces_placeholders():
 
 def test_render_trigger_parse_prompt_raises_on_unreplaced_placeholders():
     now = datetime(2026, 5, 24, 8, 0, tzinfo=timezone.utc)
-    content = "CURRENT TIME: [INJECT_CURRENT_ISO_DATETIME]\nOTHER: [INJECT_MISSING_HERE]"
+    content = (
+        "CURRENT TIME: [INJECT_CURRENT_ISO_DATETIME]\n"
+        "OTHER: [INJECT_MISSING_HERE]"
+    )
 
     with pytest.raises(PromptLoadError, match="Unreplaced placeholders"):
         render_trigger_parse_prompt(content, now=now, timezone="UTC")

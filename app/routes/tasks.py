@@ -30,7 +30,9 @@ router = APIRouter(tags=["tasks"])
 
 
 async def _get_task_or_404(session: AsyncSession, task_id: UUID) -> ScheduledTask:
-    result = await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
+    result = await session.execute(
+        select(ScheduledTask).where(ScheduledTask.id == task_id)
+    )
     task = result.scalar_one_or_none()
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -98,7 +100,7 @@ async def list_tasks(
     if query.active_only:
         filters.append(ScheduledTask.is_active.is_(True))
 
-    count_stmt = select(func.count()).select_from(ScheduledTask)
+    count_stmt = select(func.count(ScheduledTask.id))  # pylint: disable=not-callable
     for condition in filters:
         count_stmt = count_stmt.where(condition)
     total = await session.scalar(count_stmt) or 0

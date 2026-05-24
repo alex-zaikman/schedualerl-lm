@@ -12,8 +12,17 @@ from app.config.settings import LLMSettings
 from app.parsing.relative_schedule import try_parse_once_schedule
 from app.prompts.loader import PromptLoadError, load_prompt, render_trigger_parse_prompt
 from app.scheduler.triggers import compute_next_run_at, trigger_config_from_spec
-from app.schemas.tasks import CronTriggerSpec, StructuredTriggerSpec, TextTriggerSpec, TriggerSpec
-from app.schemas.trigger_parse import TriggerParseLLMOutput, TriggerParseResponse, trigger_spec_from_llm_output
+from app.schemas.tasks import (
+    CronTriggerSpec,
+    StructuredTriggerSpec,
+    TextTriggerSpec,
+    TriggerSpec,
+)
+from app.schemas.trigger_parse import (
+    TriggerParseLLMOutput,
+    TriggerParseResponse,
+    trigger_spec_from_llm_output,
+)
 from app.validation.cron import is_valid_cron_expression
 
 logger = logging.getLogger(__name__)

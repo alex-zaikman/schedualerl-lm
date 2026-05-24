@@ -8,14 +8,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import jwt
+import jwt  # pylint: disable=wrong-import-position
 
-from app.config.settings import get_settings
+from app.config.settings import get_settings  # pylint: disable=wrong-import-position
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Mint a dev JWT for local API testing.")
-    parser.add_argument("--sub", required=True, help="User id for the sub claim (e.g. user-123)")
+    parser = argparse.ArgumentParser(description="Mint a dev JWT for API testing.")
+    parser.add_argument(
+        "--sub",
+        required=True,
+        help="User id for the sub claim (e.g. user-123)",
+    )
     parser.add_argument(
         "--expires-in-hours",
         type=int,

@@ -6,9 +6,9 @@ import pytest
 from pydantic import SecretStr
 from testcontainers.postgres import PostgresContainer
 
-from app.config.settings import AppSettings, AuthSettings, DatabaseSettings, LLMSettings, LogSettings, SchedulerSettings, Settings
+from app.config.settings import DatabaseSettings, Settings
 from app.db.migrations import run_migrations
-from tests.constants import TEST_JWT_SECRET, TEST_LLM_MAX_RETRIES, TEST_LLM_TIMEOUT_SECONDS
+from tests.fixtures.settings import make_test_settings
 
 
 @pytest.fixture
@@ -33,7 +33,10 @@ def db_name(worker_id: str) -> str:
     return f"slm_{worker_id}_{uuid4().hex[:8]}"
 
 
-def container_db_settings(container: PostgresContainer, db_name: str) -> DatabaseSettings:
+def container_db_settings(
+    container: PostgresContainer,
+    db_name: str,
+) -> DatabaseSettings:
     return DatabaseSettings(
         host=container.get_container_host_ip(),
         port=int(container.get_exposed_port(5432)),
@@ -50,17 +53,7 @@ def container_db_settings(container: PostgresContainer, db_name: str) -> Databas
 
 @pytest.fixture
 def test_settings(postgres_container: PostgresContainer, db_name: str) -> Settings:
-    return Settings(
-        app=AppSettings(name="schedulerlm-test", debug=False),
-        auth=AuthSettings(jwt_secret=SecretStr(TEST_JWT_SECRET), jwt_algorithm="HS256"),
-        log=LogSettings(level="WARNING"),
-        db=container_db_settings(postgres_container, db_name),
-        scheduler=SchedulerSettings(webhook_jwt_ttl_minutes=5, webhook_timeout_seconds=30.0),
-        llm=LLMSettings(
-            max_retries=TEST_LLM_MAX_RETRIES,
-            timeout_seconds=TEST_LLM_TIMEOUT_SECONDS,
-        ),
-    )
+    return make_test_settings(container_db_settings(postgres_container, db_name))
 
 
 async def _create_database(admin_db: DatabaseSettings, db_name: str) -> None:

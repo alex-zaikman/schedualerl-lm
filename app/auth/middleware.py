@@ -20,13 +20,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         header = request.headers.get("Authorization")
         if not header or not header.startswith("Bearer "):
-            return JSONResponse(status_code=401, content={"detail": "Missing bearer token"})
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing bearer token"},
+            )
 
         try:
             payload = decode_token(header.removeprefix("Bearer "), self.settings.auth)
             user_id = payload.get("sub")
             if not user_id:
-                return JSONResponse(status_code=401, content={"detail": "Missing sub claim"})
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Missing sub claim"},
+                )
             request.state.user_id = str(user_id)
         except jwt.PyJWTError:
             return JSONResponse(status_code=401, content={"detail": "Invalid token"})

@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.enums import HealthStatus
 from app.db.dependencies import get_db
+from app.enums import HealthStatus
 from app.schemas.health import HealthResponse
 
 router = APIRouter(tags=["health"])

@@ -4,30 +4,33 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import time_machine
 
-from app.schemas.tasks import CronTriggerSpec, IntervalTriggerSpec, OnceTrigger
 from app.scheduler.triggers import build_trigger, compute_next_run_at
+from app.schemas.tasks import CronTriggerSpec, IntervalTriggerSpec, OnceTrigger
 from tests.constants import FROZEN_TIME
+
+DAILY_9AM_UTC = CronTriggerSpec(expression="0 9 * * *", timezone="UTC")
+NINE_ONE_AM_UTC = datetime(2026, 5, 24, 9, 1, tzinfo=timezone.utc)
 
 
 @time_machine.travel(FROZEN_TIME, tick=False)
 def test_cron_next_run_at_same_day():
-    next_run = compute_next_run_at(CronTriggerSpec(expression="0 9 * * *", timezone="UTC"))
+    next_run = compute_next_run_at(DAILY_9AM_UTC)
     assert next_run == datetime(2026, 5, 24, 9, 0, tzinfo=timezone.utc)
 
 
 @time_machine.travel(datetime(2026, 5, 24, 10, 0, tzinfo=timezone.utc), tick=False)
 def test_cron_next_run_at_next_day_after_missed_hour():
-    next_run = compute_next_run_at(CronTriggerSpec(expression="0 9 * * *", timezone="UTC"))
+    next_run = compute_next_run_at(DAILY_9AM_UTC)
     assert next_run == datetime(2026, 5, 25, 9, 0, tzinfo=timezone.utc)
 
 
 @time_machine.travel(FROZEN_TIME, tick=False)
 def test_cron_trigger_advances_with_time_travel():
-    trigger = build_trigger(CronTriggerSpec(expression="0 9 * * *", timezone="UTC"))
+    trigger = build_trigger(DAILY_9AM_UTC)
     first = trigger.next()
     assert first == datetime(2026, 5, 24, 9, 0, tzinfo=timezone.utc)
 
-    with time_machine.travel(datetime(2026, 5, 24, 9, 1, tzinfo=timezone.utc), tick=False):
+    with time_machine.travel(NINE_ONE_AM_UTC, tick=False):
         second = trigger.next()
     assert second == datetime(2026, 5, 25, 9, 0, tzinfo=timezone.utc)
 
@@ -113,7 +116,7 @@ def test_scheduler_fires_once_task_after_time_travel(
         http_client,
         client.app.state.scheduler,
     )
-    client.app.state._test_http_client = http_client
+    client.app.state._test_http_client = http_client  # pylint: disable=protected-access
 
     run_at = (FROZEN_TIME + timedelta(seconds=2)).isoformat()
     response = client.post(

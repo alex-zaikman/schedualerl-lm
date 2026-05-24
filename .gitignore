@@ -44,6 +44,7 @@ coverage.xml
 .pytest_cache/
 cover/
 .ruff_cache/
+.pylint_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints

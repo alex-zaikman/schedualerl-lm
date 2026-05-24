@@ -33,7 +33,8 @@ def make_async_creator(settings: DatabaseSettings):
     def _raise_connection_error(retry_state) -> None:
         exc = retry_state.outcome.exception()
         raise DatabaseConnectionError(
-            f"Failed to connect to PostgreSQL at {settings.host}:{settings.port}/{settings.name}"
+            "Failed to connect to PostgreSQL at "
+            f"{settings.host}:{settings.port}/{settings.name}"
         ) from exc
 
     @retry(
