@@ -29,8 +29,26 @@ class IntervalTriggerSpec(BaseModel):
     seconds: int = Field(gt=0)
 
 
-TriggerSpec = Annotated[
+StructuredTriggerSpec = Annotated[
     OnceTrigger | CronTriggerSpec | IntervalTriggerSpec,
+    Field(discriminator="type"),
+]
+
+
+class TextTriggerSpec(BaseModel):
+    type: Literal["text"] = "text"
+    text: str = Field(min_length=1, max_length=2000)
+    timezone: str = "UTC"
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        ZoneInfo(value)
+        return value
+
+
+TriggerSpec = Annotated[
+    OnceTrigger | CronTriggerSpec | IntervalTriggerSpec | TextTriggerSpec,
     Field(discriminator="type"),
 ]
 

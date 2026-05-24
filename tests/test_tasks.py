@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import MagicMock, patch
 
 import httpx
 import jwt
@@ -9,6 +10,63 @@ from app.auth.jwt import decode_token, encode_token
 from app.db.models.scheduled_task import ScheduledTask
 from app.db.rls import set_scheduler_rls
 from tests.constants import FROZEN_TIME, TEST_USER_ID
+
+
+def _mock_llm_response(content: dict) -> MagicMock:
+    import json
+
+    response = MagicMock()
+    response.choices = [MagicMock()]
+    response.choices[0].message.content = json.dumps(content)
+    return response
+
+
+@time_machine.travel(FROZEN_TIME, tick=False)
+@patch("app.services.trigger_parse.completion")
+def test_create_task_with_text_trigger(mock_completion, client, auth_headers_frozen):
+    mock_completion.return_value = _mock_llm_response(
+        {"type": "cron", "expression": "0 9 * * *", "timezone": "UTC"}
+    )
+
+    response = client.post(
+        "/api/v1/tasks",
+        headers=auth_headers_frozen,
+        json={
+            "webhook_url": "https://example.com/hook",
+            "parameters": {},
+            "trigger": {"type": "text", "text": "every day at 9am UTC"},
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["trigger_type"] == "cron"
+    assert body["trigger_config"] == {"expression": "0 9 * * *", "timezone": "UTC"}
+    assert body["next_run_at"] is not None
+
+
+@time_machine.travel(FROZEN_TIME, tick=False)
+@patch("app.services.trigger_parse.completion")
+def test_create_task_text_trigger_parse_failure_returns_422(
+    mock_completion, client, auth_headers_frozen
+):
+    mock_completion.return_value = _mock_llm_response(
+        {"type": "cron", "expression": "*/61 * * * *", "timezone": "UTC"}
+    )
+
+    response = client.post(
+        "/api/v1/tasks",
+        headers=auth_headers_frozen,
+        json={
+            "webhook_url": "https://example.com/hook",
+            "parameters": {},
+            "trigger": {"type": "text", "text": "every day at 9am"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert "Invalid cron expression" in response.json()["detail"]
+    assert mock_completion.call_count == 2
 
 
 @time_machine.travel(FROZEN_TIME, tick=False)

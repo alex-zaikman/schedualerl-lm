@@ -2,18 +2,21 @@ import logging
 from uuid import uuid4
 
 from apscheduler import AsyncScheduler
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.context import CurrentUser
 from app.auth.dependencies import get_current_user
+from app.config.dependencies import get_app_settings
+from app.config.settings import Settings
 from app.db.dependencies import get_db
 from app.db.models.scheduled_task import ScheduledTask
 from app.scheduler.dependencies import get_scheduler
 from app.scheduler.service import register_schedule
 from app.scheduler.triggers import compute_next_run_at, trigger_config_from_spec
 from app.schemas.tasks import TaskCreate, TaskListQuery, TaskListResponse, TaskResponse
+from app.services.trigger_parse import TriggerParseError, resolve_trigger_spec
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +45,16 @@ async def create_task(
     scheduler: AsyncScheduler = Depends(get_scheduler),
     user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_app_settings),
 ) -> TaskResponse:
-    trigger_type = body.trigger.type
-    trigger_config = trigger_config_from_spec(body.trigger)
-    next_run_at = compute_next_run_at(body.trigger)
+    try:
+        trigger = resolve_trigger_spec(body.trigger, settings.llm)
+    except TriggerParseError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    trigger_type = trigger.type
+    trigger_config = trigger_config_from_spec(trigger)
+    next_run_at = compute_next_run_at(trigger)
 
     task = ScheduledTask(
         id=uuid4(),

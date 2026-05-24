@@ -14,12 +14,12 @@ from app.schemas.tasks import (
     IntervalTriggerConfig,
     OnceTrigger,
     OnceTriggerConfig,
+    StructuredTriggerSpec,
     TriggerConfig,
-    TriggerSpec,
 )
 
 
-def build_trigger(spec: TriggerSpec):
+def build_trigger(spec: StructuredTriggerSpec):
     if isinstance(spec, OnceTrigger):
         run_at = spec.run_at
         if run_at.tzinfo is None:
@@ -37,7 +37,7 @@ def build_trigger_from_task(task: ScheduledTask):
     return build_trigger(spec)
 
 
-def _task_to_trigger_spec(task: ScheduledTask) -> TriggerSpec:
+def _task_to_trigger_spec(task: ScheduledTask) -> StructuredTriggerSpec:
     config = task.trigger_config
     if task.trigger_type == TriggerType.ONCE:
         return OnceTrigger(run_at=datetime.fromisoformat(config["run_at"]))
@@ -51,7 +51,7 @@ def _task_to_trigger_spec(task: ScheduledTask) -> TriggerSpec:
     raise ValueError(f"Unsupported trigger type: {task.trigger_type}")
 
 
-def trigger_config_from_spec(spec: TriggerSpec) -> TriggerConfig:
+def trigger_config_from_spec(spec: StructuredTriggerSpec) -> TriggerConfig:
     if isinstance(spec, OnceTrigger):
         run_at = spec.run_at
         if run_at.tzinfo is None:
@@ -64,7 +64,7 @@ def trigger_config_from_spec(spec: TriggerSpec) -> TriggerConfig:
     raise ValueError(f"Unsupported trigger type: {spec}")
 
 
-def compute_next_run_at(spec: TriggerSpec) -> datetime | None:
+def compute_next_run_at(spec: StructuredTriggerSpec) -> datetime | None:
     trigger = build_trigger(spec)
     next_fire = trigger.next()
     if next_fire is None:

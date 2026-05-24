@@ -9,13 +9,13 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt
 from app.config.settings import LLMSettings
 from app.prompts.loader import PromptLoadError, load_prompt
 from app.scheduler.triggers import compute_next_run_at, trigger_config_from_spec
-from app.schemas.tasks import CronTriggerSpec, TriggerSpec
+from app.schemas.tasks import CronTriggerSpec, StructuredTriggerSpec, TextTriggerSpec, TriggerSpec
 from app.schemas.trigger_parse import TriggerParseResponse
 from app.validation.cron import is_valid_cron_expression
 
 logger = logging.getLogger(__name__)
 
-_TRIGGER_SPEC_ADAPTER = TypeAdapter(TriggerSpec)
+_STRUCTURED_TRIGGER_SPEC_ADAPTER = TypeAdapter(StructuredTriggerSpec)
 
 
 class TriggerParseError(Exception):
@@ -29,14 +29,14 @@ def _extract_content(response) -> str:
     return content.strip()
 
 
-def _parse_trigger_json(raw: str) -> TriggerSpec:
+def _parse_trigger_json(raw: str) -> StructuredTriggerSpec:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise TriggerParseError(f"Invalid JSON: {exc}") from exc
 
     try:
-        spec = _TRIGGER_SPEC_ADAPTER.validate_python(data)
+        spec = _STRUCTURED_TRIGGER_SPEC_ADAPTER.validate_python(data)
     except ValidationError as exc:
         raise TriggerParseError(f"Invalid trigger spec: {exc}") from exc
 
@@ -73,12 +73,12 @@ def _call_llm(
     return _extract_content(response)
 
 
-def parse_trigger_text(
+def parse_trigger_text_to_spec(
     text: str,
     settings: LLMSettings,
     *,
     timezone: str = "UTC",
-) -> TriggerParseResponse:
+) -> StructuredTriggerSpec:
     try:
         system_prompt = load_prompt(settings.trigger_parse_prompt_path)
     except PromptLoadError as exc:
@@ -128,13 +128,31 @@ def parse_trigger_text(
         after=_after_retry,
         reraise=True,
     )
-    def _parse_once() -> TriggerParseResponse:
+    def _parse_once() -> StructuredTriggerSpec:
         raw = _call_llm(settings, messages)
-        spec = _parse_trigger_json(raw)
-        return TriggerParseResponse(
-            trigger_type=spec.type,
-            trigger_config=trigger_config_from_spec(spec),
-            next_run_at=compute_next_run_at(spec),
-        )
+        return _parse_trigger_json(raw)
 
     return _parse_once()
+
+
+def parse_trigger_text(
+    text: str,
+    settings: LLMSettings,
+    *,
+    timezone: str = "UTC",
+) -> TriggerParseResponse:
+    spec = parse_trigger_text_to_spec(text, settings, timezone=timezone)
+    return TriggerParseResponse(
+        trigger_type=spec.type,
+        trigger_config=trigger_config_from_spec(spec),
+        next_run_at=compute_next_run_at(spec),
+    )
+
+
+def resolve_trigger_spec(
+    spec: TriggerSpec,
+    settings: LLMSettings,
+) -> StructuredTriggerSpec:
+    if isinstance(spec, TextTriggerSpec):
+        return parse_trigger_text_to_spec(spec.text, settings, timezone=spec.timezone)
+    return spec
