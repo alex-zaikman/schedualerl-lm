@@ -2,7 +2,6 @@ from datetime import timedelta
 from uuid import uuid4
 
 import httpx
-import jwt
 import time_machine
 
 from app.auth.jwt import decode_token
@@ -179,7 +178,9 @@ def test_run_task_not_found(client, auth_headers_frozen):
 
 
 @time_machine.travel(FROZEN_TIME, tick=False)
-def test_run_task_cross_user_isolation(client, auth_headers_frozen, test_settings):
+def test_run_task_cross_user_isolation(
+    client, auth_headers_frozen, other_user_headers_frozen
+):
     run_at = (FROZEN_TIME + timedelta(hours=1)).isoformat()
     create_response = client.post(
         "/api/v1/tasks",
@@ -192,19 +193,9 @@ def test_run_task_cross_user_isolation(client, auth_headers_frozen, test_setting
     )
     task_id = create_response.json()["id"]
 
-    other_token = jwt.encode(
-        {
-            "sub": "other-user-456",
-            "exp": FROZEN_TIME + timedelta(hours=1),
-        },
-        test_settings.auth.jwt_secret.get_secret_value(),
-        algorithm=test_settings.auth.jwt_algorithm,
-    )
-    other_headers = {"Authorization": f"Bearer {other_token}"}
-
     response = client.post(
         f"/api/v1/tasks/{task_id}/run",
-        headers=other_headers,
+        headers=other_user_headers_frozen,
     )
     assert response.status_code == 404
 
@@ -328,7 +319,9 @@ def test_schedule_not_found(client, auth_headers_frozen):
 
 
 @time_machine.travel(FROZEN_TIME, tick=False)
-def test_schedule_cross_user_isolation(client, auth_headers_frozen, test_settings):
+def test_schedule_cross_user_isolation(
+    client, auth_headers_frozen, other_user_headers_frozen
+):
     run_at = (FROZEN_TIME + timedelta(hours=1)).isoformat()
     create_response = client.post(
         "/api/v1/tasks",
@@ -341,19 +334,9 @@ def test_schedule_cross_user_isolation(client, auth_headers_frozen, test_setting
     )
     task_id = create_response.json()["id"]
 
-    other_token = jwt.encode(
-        {
-            "sub": "other-user-456",
-            "exp": FROZEN_TIME + timedelta(hours=1),
-        },
-        test_settings.auth.jwt_secret.get_secret_value(),
-        algorithm=test_settings.auth.jwt_algorithm,
-    )
-    other_headers = {"Authorization": f"Bearer {other_token}"}
-
     response = client.get(
         f"/api/v1/tasks/{task_id}/schedule",
-        headers=other_headers,
+        headers=other_user_headers_frozen,
     )
     assert response.status_code == 404
 

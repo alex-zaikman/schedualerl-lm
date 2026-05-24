@@ -2,7 +2,6 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import httpx
-import jwt
 import time_machine
 from sqlalchemy import select
 
@@ -234,7 +233,7 @@ def test_deactivate_task_not_found(client, auth_headers_frozen):
 
 @time_machine.travel(FROZEN_TIME, tick=False)
 def test_deactivate_task_cross_user_isolation(
-    client, auth_headers_frozen, test_settings
+    client, auth_headers_frozen, other_user_headers_frozen
 ):
     run_at = (FROZEN_TIME + timedelta(hours=1)).isoformat()
     create_response = client.post(
@@ -248,19 +247,9 @@ def test_deactivate_task_cross_user_isolation(
     )
     task_id = create_response.json()["id"]
 
-    other_token = jwt.encode(
-        {
-            "sub": "other-user-456",
-            "exp": FROZEN_TIME + timedelta(hours=1),
-        },
-        test_settings.auth.jwt_secret.get_secret_value(),
-        algorithm=test_settings.auth.jwt_algorithm,
-    )
-    other_headers = {"Authorization": f"Bearer {other_token}"}
-
     response = client.post(
         f"/api/v1/tasks/{task_id}/deactivate",
-        headers=other_headers,
+        headers=other_user_headers_frozen,
     )
     assert response.status_code == 404
 
@@ -378,7 +367,9 @@ def test_activate_task_not_found(client, auth_headers_frozen):
 
 
 @time_machine.travel(FROZEN_TIME, tick=False)
-def test_activate_task_cross_user_isolation(client, auth_headers_frozen, test_settings):
+def test_activate_task_cross_user_isolation(
+    client, auth_headers_frozen, other_user_headers_frozen
+):
     run_at = (FROZEN_TIME + timedelta(hours=1)).isoformat()
     create_response = client.post(
         "/api/v1/tasks",
@@ -396,19 +387,9 @@ def test_activate_task_cross_user_isolation(client, auth_headers_frozen, test_se
         headers=auth_headers_frozen,
     )
 
-    other_token = jwt.encode(
-        {
-            "sub": "other-user-456",
-            "exp": FROZEN_TIME + timedelta(hours=1),
-        },
-        test_settings.auth.jwt_secret.get_secret_value(),
-        algorithm=test_settings.auth.jwt_algorithm,
-    )
-    other_headers = {"Authorization": f"Bearer {other_token}"}
-
     response = client.post(
         f"/api/v1/tasks/{task_id}/activate",
-        headers=other_headers,
+        headers=other_user_headers_frozen,
     )
     assert response.status_code == 404
 
@@ -442,7 +423,9 @@ def test_activate_expired_once_task_returns_422(client, auth_headers_frozen):
 
 
 @time_machine.travel(FROZEN_TIME, tick=False)
-def test_tasks_cross_user_isolation(client, auth_headers_frozen, test_settings):
+def test_tasks_cross_user_isolation(
+    client, auth_headers_frozen, other_user_headers_frozen
+):
     run_at = (FROZEN_TIME + timedelta(hours=1)).isoformat()
     create_response = client.post(
         "/api/v1/tasks",
@@ -455,17 +438,9 @@ def test_tasks_cross_user_isolation(client, auth_headers_frozen, test_settings):
     )
     assert create_response.status_code == 201
 
-    other_token = jwt.encode(
-        {
-            "sub": "other-user-456",
-            "exp": FROZEN_TIME + timedelta(hours=1),
-        },
-        test_settings.auth.jwt_secret.get_secret_value(),
-        algorithm=test_settings.auth.jwt_algorithm,
+    list_response = client.get(
+        "/api/v1/tasks", headers=other_user_headers_frozen
     )
-    other_headers = {"Authorization": f"Bearer {other_token}"}
-
-    list_response = client.get("/api/v1/tasks", headers=other_headers)
     assert list_response.status_code == 200
     list_body = list_response.json()
     assert list_body["total"] == 0
