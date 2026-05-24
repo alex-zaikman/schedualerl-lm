@@ -1,0 +1,59 @@
+---
+description: Prefer match/case over if/elif chains for dispatch
+globs: **/*.py
+alwaysApply: false
+---
+
+# Prefer match/case
+
+Use structural pattern matching when branching on a single discriminant — enums, literals, or typed model variants — instead of long `if`/`elif`/`isinstance` chains.
+
+```python
+# ❌ BAD — isinstance chain
+if isinstance(spec, OnceTrigger):
+    ...
+if isinstance(spec, CronTriggerSpec):
+    ...
+if isinstance(spec, IntervalTriggerSpec):
+    ...
+
+# ❌ BAD — literal elif chain
+if output.type == "cron":
+    ...
+elif output.type == "interval":
+    ...
+elif output.type == "once":
+    ...
+
+# ✅ GOOD — match on type or enum
+match spec:
+    case OnceTrigger(run_at=run_at):
+        ...
+    case CronTriggerSpec(expression=expression, timezone=tz):
+        ...
+    case IntervalTriggerSpec(seconds=seconds):
+        ...
+    case _:
+        raise ValueError(f"Unsupported trigger type: {spec}")
+
+# ✅ GOOD — match on string literal / enum
+match output.type:
+    case "cron":
+        ...
+    case "interval":
+        ...
+    case "once":
+        ...
+```
+
+Use `case` guards for extra conditions on a branch:
+
+```python
+match meridiem:
+    case "pm" if hour != 12:
+        hour += 12
+    case "am" if hour == 12:
+        hour = 0
+```
+
+Keep plain `if` for one-off boolean checks, early returns, and conditions that are not dispatch on a shared value.
