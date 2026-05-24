@@ -5,22 +5,48 @@ Return ONLY valid JSON with one of these shapes:
 - {"type":"interval","seconds":<positive integer>}
 - {"type":"once","run_at":"<ISO 8601 datetime with timezone>"}
 
-Rules:
-- Use standard 5-field unix cron: MINUTE HOUR DAY MONTH DAY_OF_WEEK
-- Field 1 = minute (0-59), field 2 = hour (0-23). Never swap them.
-- Convert 12-hour times to 24-hour for the HOUR field; set MINUTE to 0 unless specified:
+Cron format — exactly 5 fields, space-separated, no leading/trailing spaces:
+  MINUTE HOUR DAY-OF-MONTH MONTH DAY-OF-WEEK
+
+Field rules:
+- MINUTE: 0-59
+- HOUR: 0-23 (24-hour clock)
+- DAY-OF-MONTH (field 3): 1-31 or * — never put weekday names here
+- MONTH (field 4): 1-12 or *
+- DAY-OF-WEEK (field 5): 0-6 (0=Sunday, 6=Saturday) or sun-sat / SUN-SAT — weekday names go ONLY in this field
+
+Time conversion:
+- Convert 12-hour times to 24-hour; minute 0 unless specified:
   - "11 pm" / "11pm" → hour 23 → "0 23 * * *"
   - "11 am" / "11am" → hour 11 → "0 11 * * *"
   - "9 am" → hour 9 → "0 9 * * *"
   - "9:30 pm" → hour 23, minute 30 → "30 23 * * *"
-- "daily at X" / "every day at X" → cron with day/month/dow as *
-- For cron, expression must be valid (e.g. "0 9 * * *" for daily at 9:00)
+- "morning" (no time given) → 9:00 → hour 9, minute 0
+- "afternoon" → 14:00; "evening" → 18:00; "noon" → 12:00; "midnight" → 0:00
+
+Recurring patterns:
+- "daily at X" / "every day at X" → day/month/dow as *
+- "every [weekday]" / "on [weekday]s" → set dow only, day/month as * (e.g. Saturday → "0 9 * * 6" or "0 9 * * SAT")
+- "every other week on [weekday]" / "biweekly on [weekday]" / "every two weeks on [weekday]":
+  5-field cron cannot skip alternate weeks; use weekly cron on that weekday (e.g. Saturday morning → "0 9 * * 6")
+- "every other week" / "every two weeks" / "biweekly" / "fortnightly" with no weekday → interval 1209600 (14 days)
+- Correct obvious weekday typos (e.g. "sturday" → Saturday = 6 or SAT, not Sunday)
+
+Interval:
+- "every N seconds" → seconds = N
+- "every N minutes" → seconds = N * 60
+- "every N hours" → seconds = N * 3600
+- "every N days" → seconds = N * 86400
+
+General:
+- Prefer cron for recurring calendar schedules; interval for fixed periods; once for one-time runs
 - For once, run_at must include timezone offset
-- For interval, seconds must be a positive integer
-- Prefer cron for recurring schedules, interval for "every N seconds/minutes", once for one-time runs
+- Expression must be valid 5-field unix cron (e.g. "0 9 * * *" for daily at 9:00, "0 9 * * 6" for Saturdays at 9:00)
 
 Examples:
 {"type":"cron","expression":"0 9 * * *","timezone":"UTC"}
 {"type":"cron","expression":"0 23 * * *","timezone":"UTC"}
+{"type":"cron","expression":"0 9 * * 6","timezone":"UTC"}
 {"type":"interval","seconds":300}
+{"type":"interval","seconds":1209600}
 {"type":"once","run_at":"2026-05-24T08:15:00+00:00"}
