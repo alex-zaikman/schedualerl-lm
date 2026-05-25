@@ -1,4 +1,6 @@
+from collections.abc import Iterator
 from datetime import datetime, timezone
+from itertools import islice
 from zoneinfo import ZoneInfo
 
 from apscheduler.triggers.cron import CronTrigger
@@ -82,21 +84,30 @@ def compute_next_run_at_for_task(task: ScheduledTask) -> datetime | None:
     return compute_next_run_at(_task_to_trigger_spec(task))
 
 
+def _iter_upcoming_run_times(
+    trigger,
+    *,
+    now: datetime,
+    is_once: bool,
+) -> Iterator[datetime]:
+    while nxt := trigger.next():
+        nxt = (nxt.tzinfo and nxt.astimezone(timezone.utc)) or nxt.replace(tzinfo=timezone.utc)
+        if nxt >= now:
+            yield nxt
+        elif is_once:
+            return
+
+
 def compute_upcoming_run_times(task: ScheduledTask, *, count: int) -> list[datetime]:
     trigger = build_trigger_from_task(task)
     now = datetime.now(timezone.utc)
-    times: list[datetime] = []
-    for _ in range(count):
-        nxt = trigger.next()
-        if nxt is None:
-            break
-        if nxt.tzinfo is None:
-            nxt = nxt.replace(tzinfo=timezone.utc)
-        else:
-            nxt = nxt.astimezone(timezone.utc)
-        if nxt < now:
-            if task.trigger_type == TriggerType.ONCE:
-                break
-            continue
-        times.append(nxt)
-    return times
+    return list(
+        islice(
+            _iter_upcoming_run_times(
+                trigger,
+                now=now,
+                is_once=task.trigger_type == TriggerType.ONCE,
+            ),
+            count,
+        )
+    )
